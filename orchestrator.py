@@ -74,20 +74,36 @@ async def run_swarm(config: Config, output_dir: str = "."):
 
     # Compute baselines per instance
     all_baselines = {}
+    print()
+    print(f"  {'=' * 56}")
+    print(f"  PROBLEM INSTANCES & BASELINES")
+    print(f"  Objective: minimize total tardiness (lower is better)")
+    print(f"  {'=' * 56}")
     for problem, profile in zip(problems, profiles):
         baselines = _compute_baselines(problem)
         all_baselines[profile.name] = baselines
-        print(f"  {profile.name} ({profile.num_jobs} jobs, tightness={profile.due_date_tightness}, "
-              f"pt={profile.min_processing_time}-{profile.max_processing_time}) — "
-              f"total_pt={problem.total_processing_time}")
+        best_baseline_name = min(baselines, key=baselines.get)
+        print(f"\n  {profile.name}")
+        print(f"    {profile.num_jobs} jobs | tightness={profile.due_date_tightness} "
+              f"| processing time={profile.min_processing_time}-{profile.max_processing_time} "
+              f"| total PT={problem.total_processing_time}")
         for name, score in baselines.items():
-            print(f"    {name}: {score}")
-    print()
+            marker = " <-- best" if name == best_baseline_name else ""
+            print(f"    {name:>4}: {score:>10,} tardiness{marker}")
 
     # Aggregate baseline scores (sum across all instances, per strategy)
     agg_baselines = {}
     for name in ["FIFO", "EDD", "SPT"]:
         agg_baselines[name] = sum(all_baselines[n][name] for n in instance_names)
+
+    best_agg_name = min(agg_baselines, key=agg_baselines.get)
+    print(f"\n  {'—' * 56}")
+    print(f"  AGGREGATE (sum across all instances) — target to beat:")
+    for name, score in agg_baselines.items():
+        marker = " <-- best" if name == best_agg_name else ""
+        print(f"    {name:>4}: {score:>10,} tardiness{marker}")
+    print(f"  {'=' * 56}")
+    print()
 
     # 2. Initialize log, prompt logger, and token tracker
     log = SharedLog(config.log, output_dir)
