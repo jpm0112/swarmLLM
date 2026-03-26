@@ -16,8 +16,36 @@ from llm_client import chat_completion
 from prompt_logger import PromptLogger
 
 
+FIX_PROMPT = """\
+Your code failed when tested on the smallest instance ({num_jobs} jobs).
+
+## Error:
+```
+{error}
+```
+
+## Your original code:
+```python
+{code}
+```
+
+Fix the code so it works correctly. The function must return a valid permutation
+of ALL job IDs — every job exactly once, no duplicates, no missing.
+
+Output your fixed code in this exact format:
+
+APPROACH: <one-line description of your approach>
+
+```python
+<your fixed code here>
+```
+
+NOTES: <what you fixed>
+"""
+
+
 AGENT_SYSTEM_PROMPT = """\
-You are an optimization researcher working on a job scheduling problem.
+You are an optimization coder working on a job scheduling problem.
 You will be given a problem description and a research direction to explore.
 Your job is to write a Python function that produces a good schedule.
 
@@ -26,7 +54,7 @@ RULES:
 2. Each job dict has keys: "id", "processing_time", "due_date"
 3. Return a list of job IDs (a permutation of all job IDs) — the order jobs should be processed
 4. The goal is to MINIMIZE total tardiness (lower is better)
-5. You may import any Python standard library module plus: numpy, scipy, networkx. Blocked: os, sys, subprocess, socket, and other system/network modules.
+5. You may import any pip package (it will be auto-installed). Already installed: {pip_packages}. Blocked: os, sys, subprocess, socket, and other system/network modules.
 6. Your code has a {timeout}s time limit.
 7. Be creative and try novel approaches based on your assigned direction
 
@@ -77,7 +105,8 @@ Think carefully about this direction. Design a scheduling algorithm that follows
 this approach. Write clean, working Python code.
 """
 
-    system_prompt = AGENT_SYSTEM_PROMPT.format(timeout=config.sandbox.timeout)
+    pip_list = ", ".join(config.sandbox.pip_packages) if config.sandbox.pip_packages else "none"
+    system_prompt = AGENT_SYSTEM_PROMPT.format(timeout=config.sandbox.timeout, pip_packages=pip_list)
 
     # Ask the LLM to generate a solution
     token_usage = None
@@ -135,6 +164,74 @@ this approach. Write clean, working Python code.
             "llm_time": llm_time,
             "exec_time": 0.0,
         }
+
+    # Pre-test on smallest instance — if it fails, give LLM one retry with error feedback
+    smallest_name, smallest_problem = problems[0]
+    smallest_jobs = [
+        {"id": j.id, "processing_time": j.processing_time, "due_date": j.due_date}
+        for j in smallest_problem.jobs
+    ]
+
+    pre_result = execute_agent_code(code, smallest_jobs, config.sandbox)
+    pre_error = None
+    if not pre_result["success"]:
+        pre_error = pre_result["error"]
+    else:
+        eval_check = evaluate_schedule(smallest_problem, pre_result["schedule"])
+        if not eval_check["valid"]:
+            pre_error = eval_check["error"]
+
+    for retry in range(config.swarm.agent_retries):
+        if pre_error is None:
+            break  # pre-test passed, no retry needed
+
+        # Feed the error back to the LLM
+        fix_prompt = FIX_PROMPT.format(
+            num_jobs=len(smallest_problem.jobs),
+            error=pre_error[:1000],
+            code=code,
+        )
+        try:
+            fix_start = time.time()
+            fix_response, fix_tokens = await chat_completion(
+                prompt=fix_prompt,
+                system_prompt=system_prompt,
+                config=config.llm,
+                model=config.llm.agent_model,
+                temperature=config.llm.temperature_worker,
+                max_tokens=config.llm.max_tokens_worker,
+            )
+            llm_time += time.time() - fix_start
+            if fix_tokens and token_usage:
+                token_usage.prompt_tokens += fix_tokens.prompt_tokens
+                token_usage.completion_tokens += fix_tokens.completion_tokens
+                token_usage.total_tokens += fix_tokens.total_tokens
+
+            if prompt_logger:
+                prompt_logger.log(f"agent_fix{retry+1}", agent_id, iteration,
+                                  system_prompt, fix_prompt, fix_response)
+
+            fix_approach, fix_code, fix_notes = _parse_response(fix_response)
+            if fix_code:
+                code = fix_code
+                if fix_approach:
+                    approach = fix_approach
+                if fix_notes:
+                    notes = fix_notes + f" (fixed after pre-test retry {retry+1})"
+
+                # Re-test on smallest instance
+                pre_result = execute_agent_code(code, smallest_jobs, config.sandbox)
+                pre_error = None
+                if not pre_result["success"]:
+                    pre_error = pre_result["error"]
+                else:
+                    eval_check = evaluate_schedule(smallest_problem, pre_result["schedule"])
+                    if not eval_check["valid"]:
+                        pre_error = eval_check["error"]
+            else:
+                break  # couldn't parse fixed code, stop retrying
+        except Exception:
+            break  # LLM call failed, stop retrying
 
     # Test on all instances
     exec_start = time.time()

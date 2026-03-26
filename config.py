@@ -31,6 +31,7 @@ class SwarmConfig:
     num_iterations: int = 5
     explore_ratio: float = 0.5  # fraction of agents that explore (vs exploit)
     max_concurrent_agents: int = 5  # overridden by setup_run.py based on model + GPUs
+    agent_retries: int = 1  # retries per agent if code fails pre-test on smallest instance
 
 
 @dataclass

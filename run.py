@@ -28,7 +28,8 @@ def main():
                         help="Comma-separated instance sizes, e.g. '20,50,100'. "
                              "Overrides default profiles with auto-generated ones.")
     parser.add_argument("--seed", type=int, default=None, help="Random seed for problem generation")
-    parser.add_argument("--timeout", type=int, default=None, help="Code execution timeout in seconds (default: 60)")
+    parser.add_argument("--timeout", type=int, default=None, help="Code execution timeout in seconds (default: 120)")
+    parser.add_argument("--agent-retries", type=int, default=None, help="Retries per agent if code fails pre-test (default: 1)")
     parser.add_argument("--base-urls", type=str, default=None, help="Comma-separated Ollama base URLs (e.g. 'http://localhost:11434,http://localhost:11435')")
     parser.add_argument("--output-dir", type=str, default=".", help="Directory for output files")
     args = parser.parse_args()
@@ -69,6 +70,8 @@ def main():
         config.problem.seed = args.seed
     if args.timeout is not None:
         config.sandbox.timeout = args.timeout
+    if args.agent_retries is not None:
+        config.swarm.agent_retries = args.agent_retries
     if args.base_urls is not None:
         config.llm.base_urls = [u.strip() for u in args.base_urls.split(",")]
 
@@ -83,6 +86,7 @@ def main():
     print(f"  Iterations: {config.swarm.num_iterations}")
     print(f"  Explore ratio: {config.swarm.explore_ratio}")
     print(f"  Max concurrent: {config.swarm.max_concurrent_agents}")
+    print(f"  Agent retries: {config.swarm.agent_retries}")
     print(f"  Instances: {len(config.problem.instances)}")
     for inst in config.problem.instances:
         print(f"    {inst.name}: {inst.num_jobs} jobs, tightness={inst.due_date_tightness}, "

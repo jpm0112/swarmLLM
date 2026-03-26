@@ -166,6 +166,10 @@ def main():
         "Code execution timeout (seconds)", 120,
         "Max time each agent's code can run. Same for every agent."
     )
+    retries = ask(
+        "Agent retries", 1,
+        "If code fails on smallest instance, feed error back to LLM and retry. 0 = no retries."
+    )
     seed = ask(
         "Random seed", 1048596,
         "Fixed seed for reproducibility. Same seed = same problem instance."
@@ -265,6 +269,7 @@ def main():
         "--explore-ratio", explore,
         "--seed", seed,
         "--timeout", timeout,
+        "--agent-retries", retries,
         "--output-dir", outdir,
     ]
 
