@@ -14,9 +14,9 @@ from typing import Literal
 @dataclass
 class LLMConfig:
     """Configuration for Ollama LLM connections."""
-    base_url: str = "http://localhost:11434"
-    coordinator_model: str = "qwen2.5-coder:14b"
-    agent_model: str = "qwen2.5-coder:14b"
+    base_urls: list[str] = field(default_factory=lambda: ["http://localhost:11434"])
+    coordinator_model: str = "qwen3.5:27b"
+    agent_model: str = "deepcoder:14b"
     temperature_worker: float = 0.7
     temperature_coordinator: float = 0.4
     max_tokens_worker: int = 4096
@@ -27,10 +27,10 @@ class LLMConfig:
 @dataclass
 class SwarmConfig:
     """Configuration for the swarm."""
-    num_agents: int = 20
+    num_agents: int = 20  # should be a multiple of max_concurrent_agents
     num_iterations: int = 5
     explore_ratio: float = 0.5  # fraction of agents that explore (vs exploit)
-    max_concurrent_agents: int = 5  # limit parallel Ollama requests
+    max_concurrent_agents: int = 5  # overridden by setup_run.py based on model + GPUs
 
 
 @dataclass

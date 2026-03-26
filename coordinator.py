@@ -13,6 +13,7 @@ Uses the Explore/Exploit split strategy:
 
 from config import Config
 from llm_client import chat_completion
+from token_tracker import TokenUsage
 from prompt_logger import PromptLogger
 
 
@@ -93,7 +94,7 @@ async def get_next_directions(
     """
     Ask the coordinator LLM to analyze results and assign new directions.
 
-    Returns (analysis_summary, list_of_directions).
+    Returns (analysis_summary, list_of_directions, token_usage).
     """
     num_agents = config.swarm.num_agents
     num_explore = int(num_agents * config.swarm.explore_ratio)
@@ -130,7 +131,7 @@ directions for the next round. Remember:
 - Avoid repeating directions that have already been tried (unless refining them)
 """
 
-    response = await chat_completion(
+    response, token_usage = await chat_completion(
         prompt=prompt,
         system_prompt=system_prompt,
         config=config.llm,
@@ -145,7 +146,7 @@ directions for the next round. Remember:
     # Parse the response
     analysis, directions = _parse_coordinator_response(response, num_agents)
 
-    return analysis, directions
+    return analysis, directions, token_usage
 
 
 def _parse_coordinator_response(response: str, num_agents: int) -> tuple[str, list[str]]:

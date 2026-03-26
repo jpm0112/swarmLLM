@@ -9,3 +9,5 @@ instances/
 prompts/
 *.log
 *.tmp
+lit_review/
+literature_review.json

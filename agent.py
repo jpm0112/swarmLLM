@@ -79,8 +79,9 @@ this approach. Write clean, working Python code.
     system_prompt = AGENT_SYSTEM_PROMPT.format(timeout=config.sandbox.timeout)
 
     # Ask the LLM to generate a solution
+    token_usage = None
     try:
-        response = await chat_completion(
+        response, token_usage = await chat_completion(
             prompt=prompt,
             system_prompt=system_prompt,
             config=config.llm,
@@ -102,6 +103,7 @@ this approach. Write clean, working Python code.
             "notes": "",
             "instance_scores": {},
             "instance_errors": {},
+            "token_usage": None,
         }
 
     # Log the prompt and response
@@ -123,6 +125,7 @@ this approach. Write clean, working Python code.
             "notes": notes,
             "instance_scores": {},
             "instance_errors": {},
+            "token_usage": token_usage,
         }
 
     # Test on all instances
@@ -156,6 +159,9 @@ this approach. Write clean, working Python code.
         instance_scores[inst_name] = eval_result["total_tardiness"]
 
     # Determine overall success and aggregate score
+    # Only count as fully successful if ALL instances passed
+    all_passed = len(instance_scores) == len(problems) and not instance_errors
+
     if not instance_scores:
         return {
             "agent_id": agent_id,
@@ -168,6 +174,7 @@ this approach. Write clean, working Python code.
             "notes": notes,
             "instance_scores": instance_scores,
             "instance_errors": instance_errors,
+            "token_usage": token_usage,
         }
 
     aggregate_score = sum(instance_scores.values())
@@ -176,7 +183,14 @@ this approach. Write clean, working Python code.
         notes_parts.append(f"{name}={instance_scores[name]}")
     if instance_errors:
         failed_names = sorted(instance_errors.keys())
-        notes_parts.append(f"Failed on: {failed_names}")
+        reasons = []
+        for fn in failed_names:
+            err = instance_errors[fn]
+            # Extract exception type from traceback
+            lines = err.strip().splitlines()
+            last = lines[-1] if lines else err[:80]
+            reasons.append(f"{fn}: {last[:80]}")
+        notes_parts.append(f"Failed: {'; '.join(reasons)}")
     notes_parts.append(notes)
 
     return {
@@ -184,12 +198,14 @@ this approach. Write clean, working Python code.
         "direction": direction,
         "approach": approach,
         "code": code,
-        "score": aggregate_score,
-        "success": True,
-        "error": None,
+        "score": aggregate_score if all_passed else None,
+        "success": all_passed,
+        "error": first_error if not all_passed else None,
+        "failure_reason": f"passed {len(instance_scores)}/{len(problems)} instances" if not all_passed else None,
         "notes": " | ".join(notes_parts),
         "instance_scores": instance_scores,
         "instance_errors": instance_errors,
+        "token_usage": token_usage,
     }
 
 

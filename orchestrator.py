@@ -33,6 +33,7 @@ from agent import run_agent
 from coordinator import get_initial_directions, get_next_directions
 from logger import SharedLog
 from prompt_logger import PromptLogger
+from token_tracker import TokenTracker
 
 
 async def run_swarm(config: Config, output_dir: str = "."):
@@ -88,9 +89,10 @@ async def run_swarm(config: Config, output_dir: str = "."):
     for name in ["FIFO", "EDD", "SPT"]:
         agg_baselines[name] = sum(all_baselines[n][name] for n in instance_names)
 
-    # 2. Initialize log and prompt logger
+    # 2. Initialize log, prompt logger, and token tracker
     log = SharedLog(config.log, output_dir)
     prompt_logger = PromptLogger(output_dir)
+    token_tracker = TokenTracker()
 
     # Save config for this run
     config_path = os.path.join(output_dir, "config.json")
@@ -106,6 +108,7 @@ async def run_swarm(config: Config, output_dir: str = "."):
     # 3. Main loop
     best_score = min(agg_baselines.values())
     best_approach = "baseline"
+    best_instance_scores = {}  # per-instance scores for best solution
     # Track top solutions (score, approach, code) for exploit agents
     top_solutions = []
 
@@ -121,13 +124,16 @@ async def run_swarm(config: Config, output_dir: str = "."):
         else:
             print("  Coordinator analyzing results...")
             log_content = log.read()
-            analysis, directions = await get_next_directions(
+            analysis, directions, coord_tokens = await get_next_directions(
                 iteration=iteration,
                 log_content=log_content,
                 config=config,
                 prompt_logger=prompt_logger,
                 top_solutions=top_solutions,
             )
+            if coord_tokens:
+                token_tracker.record("coordinator", iteration, None,
+                                     config.llm.coordinator_model, coord_tokens)
             print(f"  Coordinator analysis: {analysis[:200]}...")
             log.append_coordinator_summary(iteration, analysis)
 
@@ -152,9 +158,12 @@ async def run_swarm(config: Config, output_dir: str = "."):
         elapsed = time.time() - start_time
         print(f"  Completed in {elapsed:.1f}s")
 
-        # Log results and track progress
+        # Log results, track progress, record tokens
         successful = 0
         for result in results:
+            if result.get("token_usage"):
+                token_tracker.record("agent", iteration, result["agent_id"],
+                                     config.llm.agent_model, result["token_usage"])
             log.append_result(
                 iteration=iteration,
                 agent_id=result["agent_id"],
@@ -186,6 +195,7 @@ async def run_swarm(config: Config, output_dir: str = "."):
                 if result["score"] < best_score:
                     best_score = result["score"]
                     best_approach = result["approach"]
+                    best_instance_scores = result.get("instance_scores", {})
                     parts = []
                     for n in instance_names:
                         if n in result.get("instance_scores", {}):
@@ -205,10 +215,13 @@ async def run_swarm(config: Config, output_dir: str = "."):
         print(f"  Results: {successful}/{config.swarm.num_agents} successful, "
               f"best aggregate: {best_score}")
         _print_iteration_summary(results, instance_names)
+        token_tracker.print_iteration_tokens(iteration)
+        token_tracker.print_running_total()
         print()
 
     # 4. Final summary
-    _print_final_summary(log, all_baselines, agg_baselines, best_score, best_approach, output_dir)
+    _print_final_summary(log, all_baselines, agg_baselines, best_score, best_approach,
+                         best_instance_scores, output_dir, token_tracker)
 
     return best_score, best_approach
 
@@ -393,7 +406,8 @@ def _print_iteration_summary(results: list[dict], instance_names: list[str]):
                       f"max={inst_scores[-1]}")
 
 
-def _print_final_summary(log, all_baselines, agg_baselines, best_score, best_approach, output_dir):
+def _print_final_summary(log, all_baselines, agg_baselines, best_score, best_approach,
+                         best_instance_scores, output_dir, token_tracker: TokenTracker = None):
     """Print the final summary after all iterations and save to file."""
     lines = []
 
@@ -417,6 +431,9 @@ def _print_final_summary(log, all_baselines, agg_baselines, best_score, best_app
         out(f"    {name}: {score}")
     out()
     out(f"  Best swarm aggregate score: {best_score}")
+    if best_instance_scores:
+        parts = [f"{name}={score}" for name, score in sorted(best_instance_scores.items())]
+        out(f"  Best per-instance scores: {', '.join(parts)}")
     out(f"  Best approach: {best_approach}")
     out()
 
@@ -429,6 +446,11 @@ def _print_final_summary(log, all_baselines, agg_baselines, best_score, best_app
     else:
         out(f"  Swarm did NOT beat baselines (best aggregate baseline: {best_baseline})")
 
+    out()
+    if token_tracker:
+        token_lines = token_tracker.print_final_summary()
+        lines.extend(token_lines)
+        token_tracker.save(output_dir)
     out()
     out(f"  Full results log: {log.path}")
     out()

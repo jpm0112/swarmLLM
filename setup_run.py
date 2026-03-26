@@ -51,7 +51,7 @@ def estimate_parallel(model_size_gb, vram_gb=24):
     return min(slots, 8)  # cap at 8
 
 
-def pick_model(models, sizes, label, preferred="qwen2.5-coder:14b"):
+def pick_model(models, sizes, label, preferred="deepcoder:14b"):
     """Show numbered menu with sizes and let user pick a model."""
     # Find default index (preferred model, or first)
     default_idx = 1
@@ -100,7 +100,7 @@ def main():
 
     print("\n  The COORDINATOR reads all results and assigns research")
     print("  directions. Bigger model = smarter strategy.")
-    coord_model = pick_model(models, sizes, "Coordinator model")
+    coord_model = pick_model(models, sizes, "Coordinator model", preferred="qwen3.5:27b")
     print(f"  -> {coord_model}")
 
     print("\n  The AGENT model writes optimization code. Runs N times")
@@ -108,23 +108,51 @@ def main():
     agent_model = pick_model(models, sizes, "Agent model")
     print(f"  -> {agent_model}")
 
-    # Estimate best parallelism for the agent model
+    # Multi-GPU setup
+    GPU_0_VRAM = 24  # RTX 3090
+    GPU_1_VRAM = 12  # RTX 3080 Ti
     agent_size = sizes.get(agent_model, 10)
-    recommended_parallel = estimate_parallel(agent_size)
-    print(f"\n  Agent model ~{agent_size:.1f}GB -> recommended max parallel: {recommended_parallel} (on 24GB VRAM)")
+
+    parallel_gpu0 = estimate_parallel(agent_size, GPU_0_VRAM)
+    parallel_gpu1 = estimate_parallel(agent_size, GPU_1_VRAM)
+
+    print(f"\n  Agent model ~{agent_size:.1f}GB")
+    print(f"    GPU 0 (RTX 3090 24GB): ~{parallel_gpu0} parallel slots")
+    print(f"    GPU 1 (RTX 3080 Ti 12GB): ~{parallel_gpu1} parallel slots")
+
+    use_dual = "n"
+    if parallel_gpu1 >= 1:
+        total_parallel = parallel_gpu0 + parallel_gpu1
+        print(f"    Combined: ~{total_parallel} parallel slots")
+        use_dual = ask("Use both GPUs? (y/n)", "y",
+                       "Runs two Ollama instances, one per GPU, for more throughput.")
+    else:
+        total_parallel = parallel_gpu0
+        print(f"    GPU 1 too small for this model, using GPU 0 only")
+
+    if use_dual.lower() == "y":
+        recommended_parallel = total_parallel
+    else:
+        recommended_parallel = parallel_gpu0
+
+    # Default agents = 4 batches of max parallel (must be a multiple)
+    default_agents = recommended_parallel * 4
 
     print()
+    concurrent = ask(
+        "Max concurrent agents", recommended_parallel,
+        f"How many agents run at the same time. Calculated from model size and GPU VRAM."
+    )
+    concurrent_int = int(concurrent)
+    default_agents = concurrent_int * 4  # recalculate if user changed concurrent
     agents = ask(
-        "Number of agents", recommended_parallel,
-        f"How many agents work on the problem each iteration. Default matches max parallel ({recommended_parallel})."
+        "Number of agents", default_agents,
+        f"How many agents per iteration. Should be a multiple of {concurrent_int} "
+        f"(= {default_agents // concurrent_int} full batches)."
     )
     iterations = ask(
         "Number of iterations", 5,
         "How many rounds of generate -> evaluate -> coordinate."
-    )
-    concurrent = ask(
-        "Max concurrent agents", min(int(agents), recommended_parallel),
-        f"How many agents run at the same time. Max recommended: {recommended_parallel} (based on your VRAM)."
     )
     instance_sizes = ask(
         "Instance sizes (comma-separated)", "20,50,100",
@@ -136,7 +164,7 @@ def main():
     )
     timeout = ask(
         "Code execution timeout (seconds)", 60,
-        "Max time each agent's code can run. Same limit for all agents."
+        "Max time each agent's code can run. Same for every agent."
     )
     seed = ask(
         "Random seed", 1048596,
@@ -150,6 +178,8 @@ def main():
     outdir = os.path.join("runs", f"{timestamp}_coord-{safe_coord}_agent-{safe_agent}_{agents}agents_{iterations}iter")
     os.makedirs(outdir, exist_ok=True)
 
+    dual_gpu = use_dual.lower() == "y"
+
     print()
     print("=" * 60)
     print("  Configuration:")
@@ -158,6 +188,7 @@ def main():
     print(f"    Agents:        {agents}")
     print(f"    Iterations:    {iterations}")
     print(f"    Concurrent:    {concurrent}")
+    print(f"    GPUs:          {'2 (dual)' if dual_gpu else '1 (single)'}")
     print(f"    Instances:     {instance_sizes} jobs")
     print(f"    Explore ratio: {explore}")
     print(f"    Timeout:       {timeout}s")
@@ -181,15 +212,42 @@ def main():
             capture_output=True,
         )
 
-    # Restart Ollama with OLLAMA_NUM_PARALLEL so it actually takes effect
+    # Kill existing Ollama instances
     print()
-    print(f"  Restarting Ollama with OLLAMA_NUM_PARALLEL={concurrent}...")
+    print("  Stopping existing Ollama instances...")
     subprocess.run(["taskkill", "/f", "/im", "ollama.exe"], capture_output=True)
     subprocess.run(["taskkill", "/f", "/im", "ollama_runners.exe"], capture_output=True)
     import time as _time
+    _time.sleep(2)
+
     env = os.environ.copy()
-    env["OLLAMA_NUM_PARALLEL"] = concurrent
-    subprocess.Popen(["ollama", "serve"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    base_urls = []
+
+    if dual_gpu:
+        # GPU 0 (RTX 3090) on port 11434
+        env0 = env.copy()
+        env0["CUDA_VISIBLE_DEVICES"] = "0"
+        env0["OLLAMA_NUM_PARALLEL"] = str(parallel_gpu0)
+        env0["OLLAMA_HOST"] = "127.0.0.1:11434"
+        print(f"  Starting Ollama on GPU 0 (port 11434, {parallel_gpu0} parallel)...")
+        subprocess.Popen(["ollama", "serve"], env=env0, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        base_urls.append("http://localhost:11434")
+
+        # GPU 1 (RTX 3080 Ti) on port 11435
+        env1 = env.copy()
+        env1["CUDA_VISIBLE_DEVICES"] = "1"
+        env1["OLLAMA_NUM_PARALLEL"] = str(parallel_gpu1)
+        env1["OLLAMA_HOST"] = "127.0.0.1:11435"
+        print(f"  Starting Ollama on GPU 1 (port 11435, {parallel_gpu1} parallel)...")
+        subprocess.Popen(["ollama", "serve"], env=env1, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        base_urls.append("http://localhost:11435")
+    else:
+        # Single GPU mode
+        env["OLLAMA_NUM_PARALLEL"] = concurrent
+        print(f"  Starting Ollama with OLLAMA_NUM_PARALLEL={concurrent}...")
+        subprocess.Popen(["ollama", "serve"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        base_urls.append("http://localhost:11434")
+
     _time.sleep(3)  # wait for Ollama to start
 
     print("  Starting SwarmLLM...")
@@ -203,6 +261,7 @@ def main():
         "--iterations", iterations,
         "--max-concurrent", concurrent,
         "--instance-sizes", instance_sizes,
+        "--base-urls", ",".join(base_urls),
         "--explore-ratio", explore,
         "--seed", seed,
         "--timeout", timeout,

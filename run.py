@@ -28,7 +28,8 @@ def main():
                         help="Comma-separated instance sizes, e.g. '20,50,100'. "
                              "Overrides default profiles with auto-generated ones.")
     parser.add_argument("--seed", type=int, default=None, help="Random seed for problem generation")
-    parser.add_argument("--timeout", type=int, default=None, help="Code execution timeout in seconds (default: 30)")
+    parser.add_argument("--timeout", type=int, default=None, help="Code execution timeout in seconds (default: 60)")
+    parser.add_argument("--base-urls", type=str, default=None, help="Comma-separated Ollama base URLs (e.g. 'http://localhost:11434,http://localhost:11435')")
     parser.add_argument("--output-dir", type=str, default=".", help="Directory for output files")
     args = parser.parse_args()
 
@@ -68,6 +69,8 @@ def main():
         config.problem.seed = args.seed
     if args.timeout is not None:
         config.sandbox.timeout = args.timeout
+    if args.base_urls is not None:
+        config.llm.base_urls = [u.strip() for u in args.base_urls.split(",")]
 
     # Ensure output dir exists
     os.makedirs(args.output_dir, exist_ok=True)
@@ -84,6 +87,7 @@ def main():
     for inst in config.problem.instances:
         print(f"    {inst.name}: {inst.num_jobs} jobs, tightness={inst.due_date_tightness}, "
               f"pt={inst.min_processing_time}-{inst.max_processing_time}")
+    print(f"  Ollama URLs: {config.llm.base_urls}")
     print(f"  Seed: {config.problem.seed}")
     print()
 

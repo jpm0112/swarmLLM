@@ -15,14 +15,14 @@ A framework where multiple LLM agents work in parallel to solve optimization pro
 ```
 Orchestrator (Python code, not an LLM)
     │
-    ├── Coordinator LLM
+    ├── Coordinator LLM (qwen3.5:27b — runs once per iteration, sequentially)
     │   - Reads shared results log + top 5 solution codes
     │   - Sees per-instance scores, failure reasons, and error details
     │   - Analyzes progress across all instance sizes
     │   - Assigns unique direction to each agent
     │
-    └── Agent LLMs (×N, run in parallel)
-        - Receives a direction
+    └── Agent LLMs (×N, deepcoder:14b — run in parallel)
+        - Receives a direction from coordinator
         - Writes a Python schedule() function
         - Code runs in sandboxed subprocess
         - Tested on ALL problem instances (diverse sizes & characteristics)
@@ -42,13 +42,15 @@ Orchestrator (Python code, not an LLM)
 | Agent diversity | Explicit direction assignment by coordinator |
 | Stopping criteria | Fixed iterations (default 5) |
 | LLM backend | Ollama (local), separate models for coordinator vs agents |
-| Default model | qwen2.5-coder:14b (fits on 3090 24GB) |
-| Parallelism | OLLAMA_NUM_PARALLEL=4 set as user env var |
+| Coordinator model | qwen3.5:27b (~17GB) — smarter strategy, runs sequentially |
+| Agent model | deepcoder:14b (~9GB) — best coding perf at this size, reasoning backbone |
+| Parallelism | Dual GPU: 3090 (4 slots) + 3080 Ti (1 slot) = 5 concurrent |
 | Instance testing | Multi-instance benchmark with diverse profiles |
 | Agent freedom | Minimal prompt injection — don't bias agent approaches |
 | Schedule validation | No auto-repair — agent must produce valid permutation |
 | Repeated directions | "Avoid repeating" (soft), not "Do NOT repeat" (hard) |
 | Top solutions | Passed to coordinator only, not agents directly |
+| Default agents | Multiple of max concurrent (e.g. 20 = 4 batches of 5) |
 
 ## Problem
 
@@ -73,9 +75,18 @@ Each agent's code is tested on multiple diverse problem instances. Default profi
 - Coordinator sees which approaches scale and which don't
 - Custom profiles easy to define in `config.py` (`InstanceProfile` dataclass)
 
+### Dual GPU Support
+- **GPU 0:** RTX 3090 (24GB) — runs agents in parallel (~4 slots with 14b model)
+- **GPU 1:** RTX 3080 Ti (12GB) — runs agents in parallel (~1 slot with 14b model)
+- Two Ollama instances on separate ports (11434, 11435), one per GPU
+- `llm_client.py` round-robins requests across both instances
+- `setup_run.py` auto-calculates slots per GPU based on model size
+- Coordinator runs sequentially so its larger model (27b) only needs one GPU at a time
+
 ### Dual Model Support
 - Separate model selection for coordinator vs agents
-- Coordinator can be a bigger/smarter model, agents can be smaller/faster
+- Coordinator: `qwen3.5:27b` — bigger/smarter for strategic thinking
+- Agents: `deepcoder:14b` — coding-specialized with reasoning backbone (built on DeepSeek-R1)
 - Both selectable via interactive numbered menu in `run.bat`
 
 ### Sandboxed Code Execution
@@ -119,7 +130,7 @@ Per-instance errors also logged separately (e.g. code works on 20 jobs but times
 ### Logging & Output
 Each run saves to a timestamped folder under `runs/`:
 ```
-runs/2026-03-26_123045_coord-qwen2.5-coder_14b_agent-qwen2.5_3b_5agents_5iter/
+runs/2026-03-26_123045_coord-qwen3.5_27b_agent-deepcoder_14b_20agents_5iter/
     config.json           # exact settings used
     results_log.md        # all agent results, per-instance scores, coordinator summaries
     summary.txt           # final results comparison vs baselines
@@ -148,26 +159,32 @@ Results log entries include:
 ### Interactive Setup (`run.bat` + `setup_run.py`)
 - Creates and activates .venv automatically
 - Shows numbered list of available Ollama models for coordinator and agent selection
-- Auto-estimates recommended parallelism based on model size vs 24GB VRAM
-- Restarts Ollama with correct OLLAMA_NUM_PARALLEL
+- Defaults: coordinator=qwen3.5:27b, agents=deepcoder:14b
+- Auto-estimates recommended parallelism based on model size vs GPU VRAM
+- Dual GPU detection: calculates slots per GPU, asks to enable
+- Default agents = max_concurrent × 4 (4 full batches)
+- Restarts Ollama with correct OLLAMA_NUM_PARALLEL (or two instances for dual GPU)
 - Installs extra pip packages for agents
 - All parameters configurable with sensible defaults
 
 ### LLM Client
 - Async wrapper around Ollama's OpenAI-compatible API
+- Round-robin across multiple base URLs (for dual GPU)
 - Retry with exponential backoff: 3 attempts, 5s/15s/30s on connection errors and 5xx
 - Does NOT retry on 4xx (bad request)
 - Accepts explicit model parameter (coordinator vs agent)
 
 ### Configurable Parameters
 All tunable via interactive prompt or CLI args:
-- Coordinator model / Agent model
-- Number of agents (default: max parallel based on VRAM)
+- Coordinator model (default: qwen3.5:27b)
+- Agent model (default: deepcoder:14b)
+- Max concurrent agents (auto-calculated from model size + GPUs)
+- Number of agents (default: max_concurrent × 4)
 - Number of iterations (default 5)
-- Max concurrent agents / OLLAMA_NUM_PARALLEL
+- Dual GPU mode (y/n)
 - Instance sizes (comma-separated, default "20,50,100") — auto-generates diverse profiles
 - Explore/exploit ratio (default 0.5)
-- Code execution timeout (default 60s)
+- Code execution timeout (default 60s, same for every agent)
 - Random seed (default 1048596)
 
 ## File Structure
@@ -181,7 +198,7 @@ swarmLLM/
 ├── orchestrator.py      # Main loop (Python, not LLM)
 ├── coordinator.py       # Coordinator LLM prompts + parsing
 ├── agent.py             # Worker agent LLM prompts + parsing
-├── llm_client.py        # Async Ollama API wrapper with retry
+├── llm_client.py        # Async Ollama API wrapper with retry + round-robin
 ├── sandbox.py           # Sandboxed code execution in subprocess
 ├── problem.py           # Job scheduling problem + evaluator + baselines + save/load
 ├── logger.py            # Shared markdown log manager
@@ -194,9 +211,26 @@ swarmLLM/
 
 ## Hardware Setup
 
-- GPU: NVIDIA RTX 3090 (24GB) + RTX 3080 Ti (12GB)
-- Ollama with OLLAMA_NUM_PARALLEL=4 (set as user env var)
+- **GPU 0:** NVIDIA RTX 3090 (24GB) — primary, runs agents + coordinator
+- **GPU 1:** NVIDIA RTX 3080 Ti (12GB) — secondary, runs additional agent slots
+- Dual Ollama instances: port 11434 (GPU 0), port 11435 (GPU 1)
+- ~5 total concurrent agent slots with deepcoder:14b
 - Python 3.9 on Windows 11 (using `from __future__ import annotations`)
+
+## Models
+
+| Role | Model | Size | Why |
+|------|-------|------|-----|
+| Coordinator | qwen3.5:27b | ~17GB | Newest general model, smart strategy, runs once per iteration |
+| Agents | deepcoder:14b | ~9GB | Best coding benchmarks at 14B, built on DeepSeek-R1 reasoning |
+| Previous | qwen2.5-coder:14b | ~9GB | Good but older, less reasoning capability |
+
+### Model Selection Rationale
+- Coordinator doesn't need coding specialization — it reads results and assigns directions
+- Coordinator runs sequentially so 27b fits fine (no parallel VRAM pressure)
+- Agents need coding + reasoning to write optimization algorithms
+- deepcoder:14b outperforms qwen2.5-coder:14b on LiveCodeBench (60.6% vs ~45%)
+- Same file size = identical parallelism
 
 ## First Run Results
 
@@ -211,8 +245,8 @@ swarmLLM/
 
 - Small models (3b) have very low success rates (~0-10%)
 - Coordinator falls back to generic directions when parsing fails in later iterations
-- Could use both GPUs (two Ollama instances) for more parallelism
 - vLLM would give better batching but requires WSL2 on Windows
+- deepcoder:14b produces longer responses (reasoning traces) — may be slower per agent
 
 ## Prior Art
 

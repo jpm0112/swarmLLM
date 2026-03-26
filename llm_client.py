@@ -6,14 +6,27 @@ LLM Client
 Thin wrapper around Ollama's OpenAI-compatible API.
 All LLM calls go through here so we can swap backends easily.
 Includes retry with backoff for resilience.
+Supports multiple Ollama instances (round-robin) for multi-GPU setups.
 """
 
 import asyncio
+import itertools
 import aiohttp
 from config import LLMConfig
+from token_tracker import TokenUsage
 
-MAX_RETRIES = 3
-RETRY_BACKOFF = [5, 15, 30]  # seconds between retries
+MAX_RETRIES = 5
+RETRY_BACKOFF = [5, 15, 30, 60, 60]  # seconds between retries
+
+# Thread-safe round-robin counter for distributing requests across URLs
+_url_counter = itertools.count()
+
+
+def _next_base_url(config: LLMConfig) -> str:
+    """Pick the next base URL in round-robin fashion."""
+    urls = config.base_urls
+    idx = next(_url_counter) % len(urls)
+    return urls[idx]
 
 
 async def chat_completion(
@@ -23,12 +36,13 @@ async def chat_completion(
     model: str | None = None,
     temperature: float | None = None,
     max_tokens: int | None = None,
-) -> str:
+) -> tuple[str, TokenUsage]:
     """
     Send a chat completion request to Ollama.
-    Retries up to 3 times on connection errors.
+    Retries with backoff on connection errors.
+    Round-robins across multiple Ollama instances if configured.
 
-    Returns the assistant's response text.
+    Returns (response_text, token_usage).
     """
     if config is None:
         config = LLMConfig()
@@ -50,7 +64,14 @@ async def chat_completion(
         "stream": False,
     }
 
-    url = f"{config.base_url}/v1/chat/completions"
+    # Pick a base URL for this request
+    # Coordinator model may be too large for smaller GPUs, so always use first URL
+    # (GPU 0 / largest VRAM). Only round-robin for agent models.
+    if model_name == config.coordinator_model and len(config.base_urls) > 1:
+        base_url = config.base_urls[0]
+    else:
+        base_url = _next_base_url(config)
+    url = f"{base_url}/v1/chat/completions"
 
     last_error = None
     for attempt in range(MAX_RETRIES):
@@ -63,7 +84,15 @@ async def chat_completion(
                 ) as resp:
                     if resp.status == 200:
                         data = await resp.json()
-                        return data["choices"][0]["message"]["content"]
+                        text = data["choices"][0]["message"]["content"]
+                        # Extract token usage from response
+                        usage_data = data.get("usage", {})
+                        usage = TokenUsage(
+                            prompt_tokens=usage_data.get("prompt_tokens", 0),
+                            completion_tokens=usage_data.get("completion_tokens", 0),
+                            total_tokens=usage_data.get("total_tokens", 0),
+                        )
+                        return text, usage
 
                     text = await resp.text()
                     last_error = f"Ollama API error ({resp.status}): {text[:500]}"
@@ -73,11 +102,16 @@ async def chat_completion(
                         raise RuntimeError(last_error)
 
         except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as e:
-            last_error = f"Connection error: {str(e)}"
+            err_detail = str(e) or type(e).__name__
+            last_error = f"Connection error ({base_url}, model={model_name}): {err_detail}"
 
-        # Wait before retry
+        # On connection failure, retry with backoff
         if attempt < MAX_RETRIES - 1:
+            if model_name != config.coordinator_model or len(config.base_urls) == 1:
+                base_url = _next_base_url(config)
+                url = f"{base_url}/v1/chat/completions"
             wait = RETRY_BACKOFF[attempt]
+            print(f"  [LLM] Retry {attempt+1}/{MAX_RETRIES} for {model_name} in {wait}s... ({last_error})")
             await asyncio.sleep(wait)
 
     raise RuntimeError(f"Failed after {MAX_RETRIES} attempts. Last error: {last_error}")
