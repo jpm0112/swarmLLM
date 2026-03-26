@@ -200,6 +200,8 @@ async def run_swarm(config: Config, output_dir: str = "."):
                 failure_reason=result.get("failure_reason"),
                 instance_scores=result.get("instance_scores"),
                 instance_errors=result.get("instance_errors"),
+                llm_time=result.get("llm_time"),
+                exec_time=result.get("exec_time"),
             )
 
             if result["success"]:
@@ -270,12 +272,15 @@ async def _run_agents_parallel(
             )
             elapsed = time.time() - agent_start
             result["runtime"] = elapsed
+            llm_t = result.get("llm_time", 0)
+            exec_t = result.get("exec_time", 0)
+            timing = f"LLM: {llm_t:.1f}s, exec: {exec_t:.1f}s, total: {elapsed:.1f}s"
             if result["success"]:
-                status = f"score={result['score']} ({elapsed:.1f}s)"
+                status = f"score={result['score']} [{timing}]"
             else:
                 reason = _categorize_failure(result.get("error", ""))
                 result["failure_reason"] = reason
-                status = f"FAILED ({reason}) ({elapsed:.1f}s)"
+                status = f"FAILED ({reason}) [{timing}]"
             print(f"    Agent {agent_id:2d} done: {status}")
             return result
 

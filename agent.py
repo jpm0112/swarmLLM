@@ -8,6 +8,7 @@ proposes a solution approach, writes code, and tests it.
 """
 
 import re
+import time
 from config import Config
 from problem import ProblemInstance, evaluate_schedule
 from sandbox import execute_agent_code
@@ -80,7 +81,9 @@ this approach. Write clean, working Python code.
 
     # Ask the LLM to generate a solution
     token_usage = None
+    llm_time = 0.0
     try:
+        llm_start = time.time()
         response, token_usage = await chat_completion(
             prompt=prompt,
             system_prompt=system_prompt,
@@ -89,6 +92,7 @@ this approach. Write clean, working Python code.
             temperature=config.llm.temperature_worker,
             max_tokens=config.llm.max_tokens_worker,
         )
+        llm_time = time.time() - llm_start
     except Exception as e:
         if prompt_logger:
             prompt_logger.log("agent", agent_id, iteration, system_prompt, prompt, "", str(e))
@@ -104,6 +108,8 @@ this approach. Write clean, working Python code.
             "instance_scores": {},
             "instance_errors": {},
             "token_usage": None,
+            "llm_time": 0.0,
+            "exec_time": 0.0,
         }
 
     # Log the prompt and response
@@ -126,9 +132,12 @@ this approach. Write clean, working Python code.
             "instance_scores": {},
             "instance_errors": {},
             "token_usage": token_usage,
+            "llm_time": llm_time,
+            "exec_time": 0.0,
         }
 
     # Test on all instances
+    exec_start = time.time()
     instance_scores = {}
     instance_errors = {}
     first_error = None
@@ -158,6 +167,8 @@ this approach. Write clean, working Python code.
 
         instance_scores[inst_name] = eval_result["total_tardiness"]
 
+    exec_time = time.time() - exec_start
+
     # Determine overall success and aggregate score
     # Only count as fully successful if ALL instances passed
     all_passed = len(instance_scores) == len(problems) and not instance_errors
@@ -175,6 +186,8 @@ this approach. Write clean, working Python code.
             "instance_scores": instance_scores,
             "instance_errors": instance_errors,
             "token_usage": token_usage,
+            "llm_time": llm_time,
+            "exec_time": exec_time,
         }
 
     aggregate_score = sum(instance_scores.values())
@@ -206,6 +219,8 @@ this approach. Write clean, working Python code.
         "instance_scores": instance_scores,
         "instance_errors": instance_errors,
         "token_usage": token_usage,
+        "llm_time": llm_time,
+        "exec_time": exec_time,
     }
 
 

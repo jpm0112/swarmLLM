@@ -47,6 +47,8 @@ class SharedLog:
         failure_reason: str | None = None,
         instance_scores: dict | None = None,
         instance_errors: dict | None = None,
+        llm_time: float | None = None,
+        exec_time: float | None = None,
     ):
         """Append an agent's result to the log."""
         entry = _format_entry(
@@ -63,6 +65,8 @@ class SharedLog:
             failure_reason=failure_reason,
             instance_scores=instance_scores,
             instance_errors=instance_errors,
+            llm_time=llm_time,
+            exec_time=exec_time,
         )
         with open(self.path, "a", encoding="utf-8") as f:
             f.write(entry)
@@ -104,11 +108,15 @@ def _format_entry(
     failure_reason: str | None = None,
     instance_scores: dict | None = None,
     instance_errors: dict | None = None,
+    llm_time: float | None = None,
+    exec_time: float | None = None,
 ) -> str:
     """Format a single agent result entry."""
     status = "SUCCESS" if success else "FAILED"
     score_str = str(score) if score is not None else "N/A"
     runtime_str = f"{runtime:.1f}s" if runtime is not None else "N/A"
+    llm_str = f"{llm_time:.1f}s" if llm_time is not None else "N/A"
+    exec_str = f"{exec_time:.1f}s" if exec_time is not None else "N/A"
 
     lines = [
         f"### Iteration {iteration} — Agent {agent_id} [{status}] ({runtime_str})",
@@ -116,7 +124,7 @@ def _format_entry(
         f"- **Direction:** {direction}",
         f"- **Approach:** {approach}",
         f"- **Aggregate Score:** {score_str}",
-        f"- **Runtime:** {runtime_str}",
+        f"- **Runtime:** {runtime_str} (LLM: {llm_str}, execution: {exec_str})",
     ]
 
     # Per-instance scores
