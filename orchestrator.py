@@ -585,11 +585,34 @@ def _print_final_summary(log, all_baselines, agg_baselines, best_score, best_app
             out(f"    {count:>4}x  {reason}")
 
     # Token usage
-    out()
     if token_tracker:
-        token_lines = token_tracker.print_final_summary()
-        lines.extend(token_lines)
+        out()
+        out("  TOKEN USAGE:")
+        out(f"    Total tokens:        {token_tracker.total_tokens:>12,}")
+        out(f"      Prompt tokens:     {token_tracker.total_prompt:>12,}")
+        out(f"      Completion tokens: {token_tracker.total_completion:>12,}")
+        out()
+        agent_calls = len([c for c in token_tracker._calls if c["role"] == "agent"])
+        coord_calls = len([c for c in token_tracker._calls if c["role"] == "coordinator"])
+        out(f"    Agent tokens:        {token_tracker.agent_total:>12,} ({agent_calls} calls)")
+        out(f"      Prompt:            {token_tracker.agent_prompt:>12,}")
+        out(f"      Completion:        {token_tracker.agent_completion:>12,}")
+        if agent_calls > 0:
+            out(f"      Avg per call:      {token_tracker.agent_total // agent_calls:>12,}")
+        out(f"    Coordinator tokens:  {token_tracker.coordinator_total:>12,} ({coord_calls} calls)")
+        out(f"      Prompt:            {token_tracker.coordinator_prompt:>12,}")
+        out(f"      Completion:        {token_tracker.coordinator_completion:>12,}")
+        if coord_calls > 0:
+            out(f"      Avg per call:      {token_tracker.coordinator_total // coord_calls:>12,}")
+        out()
+        out("    Per iteration:")
+        for it in sorted(token_tracker._iteration_totals.keys()):
+            s = token_tracker._iteration_totals[it]
+            out(f"      Iter {it:>2}: {s['total_tokens']:>10,} tokens "
+                f"(prompt: {s['prompt_tokens']:,}, completion: {s['completion_tokens']:,}) "
+                f"| {s['agent_calls']} agents + {s['coordinator_calls']} coordinator")
         token_tracker.save(output_dir)
+
     out()
     out(f"  Full results log: {log.path}")
     out()
