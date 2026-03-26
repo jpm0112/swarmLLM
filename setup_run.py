@@ -51,7 +51,7 @@ def estimate_parallel(model_size_gb, vram_gb=24):
     return min(slots, 8)  # cap at 8
 
 
-def pick_model(models, sizes, label, preferred="deepcoder:14b"):
+def pick_model(models, sizes, label, preferred="qwen2.5-coder:14b"):
     """Show numbered menu with sizes and let user pick a model."""
     # Find default index (preferred model, or first)
     default_idx = 1
@@ -100,7 +100,7 @@ def main():
 
     print("\n  The COORDINATOR reads all results and assigns research")
     print("  directions. Bigger model = smarter strategy.")
-    coord_model = pick_model(models, sizes, "Coordinator model", preferred="qwen3.5:27b")
+    coord_model = pick_model(models, sizes, "Coordinator model", preferred="qwen2.5-coder:14b")
     print(f"  -> {coord_model}")
 
     print("\n  The AGENT model writes optimization code. Runs N times")
@@ -163,7 +163,7 @@ def main():
         "Fraction of agents that try new ideas vs refine the best ones. 0.5 = balanced."
     )
     timeout = ask(
-        "Code execution timeout (seconds)", 60,
+        "Code execution timeout (seconds)", 120,
         "Max time each agent's code can run. Same for every agent."
     )
     seed = ask(

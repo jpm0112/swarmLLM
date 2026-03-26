@@ -55,33 +55,66 @@ Agent 2 [EXPLORE]: <specific direction>
 (one line per agent, covering all {num_agents} agents)
 """
 
-INITIAL_DIRECTIONS = [
-    "Implement Earliest Due Date (EDD) first scheduling — sort jobs by due date ascending",
-    "Implement Shortest Processing Time (SPT) first — sort by processing time ascending",
-    "Implement Weighted Shortest Job First — weight by due_date / processing_time ratio",
-    "Try a greedy slack-based approach: schedule jobs by (due_date - processing_time) ascending",
-    "Implement a simple genetic algorithm: random population, tournament selection, order crossover, swap mutation",
-    "Try simulated annealing: start with a random schedule, swap adjacent jobs, accept worse with decreasing probability",
-    "Implement tabu search: local search with swap neighborhood, keep a tabu list of recent moves",
-    "Try a beam search approach: expand partial schedules, keep top-K at each step based on partial tardiness",
-    "Implement ant colony optimization: ants build schedules probabilistically based on pheromone trails",
-    "Try a dynamic programming approach on subsets or approximation if exact DP is too expensive",
-    "Implement iterated local search: perturbation + local search with swap moves",
-    "Try a constructive heuristic: insert each job into the best position in the current partial schedule",
-    "Implement a priority rule combining processing time and due date: Apparent Tardiness Cost (ATC) rule",
-    "Try a random restart hill climbing: many random starts, swap-based local search from each",
-    "Implement a hybrid: EDD initial solution + simulated annealing refinement",
-    "Try a decomposition approach: split jobs into early/late groups, optimize each separately",
-    "Implement particle swarm optimization adapted for permutations",
-    "Try a branch-and-bound approach with EDD-based lower bounds (may need pruning for 20 jobs)",
-    "Implement a memetic algorithm: genetic algorithm + local search on each offspring",
-    "Try a neural-inspired approach: use numpy to compute urgency scores and sort by them",
-]
+INITIAL_SYSTEM_PROMPT = """\
+You are the coordinator of a swarm of {num_agents} optimization agents working on
+a job scheduling problem (minimize total tardiness).
+
+Each agent's code is tested on {num_instances} problem instances of different sizes
+and characteristics. Scores are reported per instance plus an aggregate (sum).
+
+This is the FIRST iteration — no results yet. Your job is to assign {num_agents}
+UNIQUE and diverse research directions for the agents to explore.
+
+Think about different algorithmic families: greedy heuristics, metaheuristics,
+dynamic programming, local search, genetic algorithms, simulated annealing,
+constraint-based, hybrid approaches, mathematical relaxations, constructive
+heuristics, priority rules, etc.
+
+OUTPUT FORMAT (you must follow this exactly):
+
+DIRECTIONS:
+Agent 0: <specific direction>
+Agent 1: <specific direction>
+Agent 2: <specific direction>
+...
+(one line per agent, covering all {num_agents} agents)
+"""
 
 
-async def get_initial_directions(config: Config) -> list[str]:
-    """Return the initial set of directions for iteration 0."""
-    return INITIAL_DIRECTIONS[:config.swarm.num_agents]
+async def get_initial_directions(
+    config: Config,
+    prompt_logger: PromptLogger | None = None,
+) -> tuple[list[str], TokenUsage]:
+    """Ask the coordinator LLM for initial directions (iteration 1)."""
+    num_agents = config.swarm.num_agents
+
+    system_prompt = INITIAL_SYSTEM_PROMPT.format(
+        num_agents=num_agents,
+        num_instances=len(config.problem.instances),
+    )
+
+    prompt = f"""This is the first iteration. No results yet.
+Assign {num_agents} diverse research directions for the agents.
+Each direction should be specific and actionable — tell the agent exactly what
+algorithm or approach to implement. Cover a wide range of algorithmic families.
+"""
+
+    response, token_usage = await chat_completion(
+        prompt=prompt,
+        system_prompt=system_prompt,
+        config=config.llm,
+        model=config.llm.coordinator_model,
+        temperature=config.llm.temperature_coordinator,
+        max_tokens=config.llm.max_tokens_coordinator,
+    )
+
+    if prompt_logger:
+        prompt_logger.log("coordinator", None, 1, system_prompt, prompt, response)
+
+    # Parse directions
+    _, directions = _parse_coordinator_response(response, num_agents)
+
+    return directions, token_usage
 
 
 async def get_next_directions(

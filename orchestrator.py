@@ -117,10 +117,16 @@ async def run_swarm(config: Config, output_dir: str = "."):
         print(f"  Iteration {iteration}/{config.swarm.num_iterations}")
         print(f"{'=' * 60}")
 
-        # Get directions
+        # Get directions from coordinator LLM
         if iteration == 1:
-            print("  Getting initial directions...")
-            directions = await get_initial_directions(config)
+            print("  Coordinator assigning initial directions...")
+            directions, coord_tokens = await get_initial_directions(
+                config=config,
+                prompt_logger=prompt_logger,
+            )
+            if coord_tokens:
+                token_tracker.record("coordinator", iteration, None,
+                                     config.llm.coordinator_model, coord_tokens)
         else:
             print("  Coordinator analyzing results...")
             log_content = log.read()

@@ -15,8 +15,8 @@ from typing import Literal
 class LLMConfig:
     """Configuration for Ollama LLM connections."""
     base_urls: list[str] = field(default_factory=lambda: ["http://localhost:11434"])
-    coordinator_model: str = "qwen3.5:27b"
-    agent_model: str = "deepcoder:14b"
+    coordinator_model: str = "qwen2.5-coder:14b"
+    agent_model: str = "qwen2.5-coder:14b"
     temperature_worker: float = 0.7
     temperature_coordinator: float = 0.4
     max_tokens_worker: int = 4096
@@ -36,7 +36,7 @@ class SwarmConfig:
 @dataclass
 class SandboxConfig:
     """Configuration for code execution sandbox."""
-    timeout: int = 60  # seconds per execution
+    timeout: int = 120  # seconds per execution
     max_memory_mb: int = 512
     # Block dangerous modules, allow everything else (stdlib + installed packages)
     blocked_imports: list[str] = field(default_factory=lambda: [
