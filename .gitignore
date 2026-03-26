@@ -5,3 +5,7 @@ __pycache__/
 results_log.md
 prompt_log.jsonl
 summary.txt
+instances/
+prompts/
+*.log
+*.tmp
