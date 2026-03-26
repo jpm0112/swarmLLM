@@ -127,6 +127,8 @@ async def run_swarm(config: Config, output_dir: str = "."):
     best_instance_scores = {}  # per-instance scores for best solution
     # Track top solutions (score, approach, code) for exploit agents
     top_solutions = []
+    # Track per-iteration stats for summary
+    iteration_stats = []
 
     for iteration in range(1, config.swarm.num_iterations + 1):
         print(f"{'=' * 60}")
@@ -236,6 +238,35 @@ async def run_swarm(config: Config, output_dir: str = "."):
                           f"aggregate={result['score']} ({scores_detail}) "
                           f"({result['approach']})")
 
+        # Collect failure reasons
+        failure_counts = {}
+        for r in results:
+            if not r["success"]:
+                reason = r.get("failure_reason") or _categorize_failure(r.get("error", ""))
+                failure_counts[reason] = failure_counts.get(reason, 0) + 1
+
+        # Collect timing stats
+        llm_times = [r.get("llm_time", 0) for r in results if r.get("llm_time")]
+        exec_times = [r.get("exec_time", 0) for r in results if r.get("exec_time")]
+        successful_scores = [r["score"] for r in results if r["success"]]
+
+        iter_stat = {
+            "iteration": iteration,
+            "num_agents": config.swarm.num_agents,
+            "successful": successful,
+            "failed": config.swarm.num_agents - successful,
+            "failure_counts": failure_counts,
+            "best_score_this_iter": min(successful_scores) if successful_scores else None,
+            "best_score_overall": best_score,
+            "best_approach": best_approach,
+            "wall_time": elapsed,
+            "llm_times": llm_times,
+            "exec_times": exec_times,
+            "avg_llm_time": sum(llm_times) / len(llm_times) if llm_times else 0,
+            "avg_exec_time": sum(exec_times) / len(exec_times) if exec_times else 0,
+        }
+        iteration_stats.append(iter_stat)
+
         print(f"  Results: {successful}/{config.swarm.num_agents} successful, "
               f"best aggregate: {best_score}")
         _print_iteration_summary(results, instance_names)
@@ -245,7 +276,8 @@ async def run_swarm(config: Config, output_dir: str = "."):
 
     # 4. Final summary
     _print_final_summary(log, all_baselines, agg_baselines, best_score, best_approach,
-                         best_instance_scores, output_dir, token_tracker)
+                         best_instance_scores, iteration_stats, config, output_dir,
+                         token_tracker)
 
     return best_score, best_approach
 
@@ -434,7 +466,8 @@ def _print_iteration_summary(results: list[dict], instance_names: list[str]):
 
 
 def _print_final_summary(log, all_baselines, agg_baselines, best_score, best_approach,
-                         best_instance_scores, output_dir, token_tracker: TokenTracker = None):
+                         best_instance_scores, iteration_stats, config,
+                         output_dir, token_tracker: TokenTracker = None):
     """Print the final summary after all iterations and save to file."""
     lines = []
 
@@ -446,33 +479,112 @@ def _print_final_summary(log, all_baselines, agg_baselines, best_score, best_app
     out("=" * 60)
     out("  FINAL RESULTS")
     out("=" * 60)
+
+    # Run configuration
     out()
-    out("  Baselines (per instance):")
+    out("  RUN CONFIGURATION:")
+    out(f"    Coordinator model: {config.llm.coordinator_model}")
+    out(f"    Agent model:       {config.llm.agent_model}")
+    out(f"    Agents per iter:   {config.swarm.num_agents}")
+    out(f"    Max concurrent:    {config.swarm.max_concurrent_agents}")
+    out(f"    Iterations:        {config.swarm.num_iterations}")
+    out(f"    Explore ratio:     {config.swarm.explore_ratio}")
+    out(f"    Code timeout:      {config.sandbox.timeout}s")
+    out(f"    Seed:              {config.problem.seed}")
+
+    # Baselines
+    out()
+    out("  BASELINES:")
     for inst_name in all_baselines:
-        out(f"    {inst_name}:")
-        for name, score in all_baselines[inst_name].items():
-            out(f"      {name}: {score}")
+        best_bl = min(all_baselines[inst_name], key=all_baselines[inst_name].get)
+        scores = ", ".join(f"{n}: {s}" for n, s in all_baselines[inst_name].items())
+        out(f"    {inst_name}: {scores} (best: {best_bl})")
+    out(f"    Aggregate: {', '.join(f'{n}: {s}' for n, s in agg_baselines.items())}")
+    best_baseline = min(agg_baselines.values())
+    best_bl_name = min(agg_baselines, key=agg_baselines.get)
+    out(f"    Target to beat: {best_baseline} ({best_bl_name})")
+
+    # Best result
     out()
-    out("  Baselines (aggregate):")
-    for name, score in agg_baselines.items():
-        out(f"    {name}: {score}")
-    out()
-    out(f"  Best swarm aggregate score: {best_score}")
+    out("  BEST RESULT:")
+    out(f"    Aggregate score: {best_score}")
     if best_instance_scores:
         parts = [f"{name}={score}" for name, score in sorted(best_instance_scores.items())]
-        out(f"  Best per-instance scores: {', '.join(parts)}")
-    out(f"  Best approach: {best_approach}")
+        out(f"    Per-instance:    {', '.join(parts)}")
+    out(f"    Approach:        {best_approach}")
     out()
-
-    best_baseline = min(agg_baselines.values())
     if best_score < best_baseline:
         improvement = ((best_baseline - best_score) / best_baseline) * 100
-        out(f"  Swarm BEAT baselines by {improvement:.1f}%")
+        out(f"    >>> Swarm BEAT baselines by {improvement:.1f}% <<<")
     elif best_score == best_baseline:
-        out(f"  Swarm MATCHED best baseline")
+        out(f"    --- Swarm MATCHED best baseline ---")
     else:
-        out(f"  Swarm did NOT beat baselines (best aggregate baseline: {best_baseline})")
+        gap = ((best_score - best_baseline) / best_baseline) * 100
+        out(f"    Swarm did NOT beat baselines (gap: +{gap:.1f}%)")
 
+    # Iteration progression
+    out()
+    out("  ITERATION PROGRESSION:")
+    out(f"    {'Iter':>4} | {'Success':>7} | {'Failed':>6} | {'Best(iter)':>10} | {'Best(all)':>10} | {'Wall Time':>9} | {'Avg LLM':>8} | {'Avg Exec':>8}")
+    out(f"    {'-'*4}-+-{'-'*7}-+-{'-'*6}-+-{'-'*10}-+-{'-'*10}-+-{'-'*9}-+-{'-'*8}-+-{'-'*8}")
+    total_successful = 0
+    total_failed = 0
+    total_wall = 0
+    for s in iteration_stats:
+        iter_best = str(s["best_score_this_iter"]) if s["best_score_this_iter"] is not None else "—"
+        out(f"    {s['iteration']:>4} | "
+            f"{s['successful']:>3}/{s['num_agents']:<3} | "
+            f"{s['failed']:>6} | "
+            f"{iter_best:>10} | "
+            f"{s['best_score_overall']:>10} | "
+            f"{s['wall_time']:>8.1f}s | "
+            f"{s['avg_llm_time']:>7.1f}s | "
+            f"{s['avg_exec_time']:>7.1f}s")
+        total_successful += s["successful"]
+        total_failed += s["failed"]
+        total_wall += s["wall_time"]
+
+    # Collect all per-agent times across iterations
+    all_llm_times = []
+    all_exec_times = []
+    for s in iteration_stats:
+        all_llm_times.extend(s["llm_times"])
+        all_exec_times.extend(s["exec_times"])
+    total_llm_time = sum(all_llm_times)
+    total_exec_time = sum(all_exec_times)
+
+    # Overall agent stats
+    total_agents = total_successful + total_failed
+    success_rate = (total_successful / total_agents * 100) if total_agents > 0 else 0
+    out()
+    out("  AGENT STATS:")
+    out(f"    Total agent runs:  {total_agents}")
+    out(f"    Successful:        {total_successful} ({success_rate:.1f}%)")
+    out(f"    Failed:            {total_failed} ({100 - success_rate:.1f}%)")
+    out()
+    out("  TIMING:")
+    out(f"    Total wall time:     {total_wall:.1f}s ({total_wall/60:.1f}m)")
+    out(f"    Total LLM time:      {total_llm_time:.1f}s ({total_llm_time/60:.1f}m) — waiting for model responses")
+    out(f"    Total exec time:     {total_exec_time:.1f}s ({total_exec_time/60:.1f}m) — running agent code in sandbox")
+    if all_llm_times:
+        out(f"    Avg LLM per agent:   {sum(all_llm_times)/len(all_llm_times):.1f}s "
+            f"(min: {min(all_llm_times):.1f}s, max: {max(all_llm_times):.1f}s)")
+    if all_exec_times:
+        out(f"    Avg exec per agent:  {sum(all_exec_times)/len(all_exec_times):.1f}s "
+            f"(min: {min(all_exec_times):.1f}s, max: {max(all_exec_times):.1f}s)")
+
+    # Failure breakdown
+    all_failures = {}
+    for s in iteration_stats:
+        for reason, count in s["failure_counts"].items():
+            all_failures[reason] = all_failures.get(reason, 0) + count
+    if all_failures:
+        out()
+        out("  FAILURE BREAKDOWN:")
+        for reason, count in sorted(all_failures.items(), key=lambda x: -x[1]):
+            out(f"    {count:>4}x  {reason}")
+
+    # Token usage
     out()
     if token_tracker:
         token_lines = token_tracker.print_final_summary()
