@@ -9,11 +9,11 @@ proposes a solution approach, writes code, and tests it.
 
 import re
 import time
-from config import Config
-from problem import ProblemInstance, evaluate_schedule
-from sandbox import execute_agent_code
-from llm_client import chat_completion
-from prompt_logger import PromptLogger
+from swarmllm.config import Config
+from swarmllm.problems.scheduling import ProblemInstance, evaluate_schedule
+from swarmllm.sandbox.executor import execute_agent_code
+from swarmllm.llm.client import chat_completion
+from swarmllm.tracking.prompt_logger import PromptLogger
 
 
 FIX_PROMPT = """\

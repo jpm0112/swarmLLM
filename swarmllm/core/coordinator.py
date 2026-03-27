@@ -11,10 +11,10 @@ Uses the Explore/Exploit split strategy:
 - Half the agents refine/improve the best approaches so far
 """
 
-from config import Config
-from llm_client import chat_completion
-from token_tracker import TokenUsage
-from prompt_logger import PromptLogger
+from swarmllm.config import Config
+from swarmllm.llm.client import chat_completion
+from swarmllm.tracking.token_tracker import TokenUsage
+from swarmllm.tracking.prompt_logger import PromptLogger
 
 
 COORDINATOR_SYSTEM_PROMPT = """\

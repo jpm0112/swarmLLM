@@ -2,9 +2,9 @@
 SwarmLLM Entry Point
 
 Usage:
-    python run.py
-    python run.py --agents 10 --iterations 3
-    python run.py --coordinator-model qwen2.5-coder:14b --agent-model qwen2.5:3b
+    python -m scripts.run
+    python -m scripts.run --agents 10 --iterations 3
+    python -m scripts.run --coordinator-model qwen2.5-coder:14b --agent-model qwen2.5:3b
 """
 
 import argparse
@@ -12,8 +12,11 @@ import asyncio
 import os
 import sys
 
-from config import Config
-from orchestrator import run_swarm
+# Ensure project root is on sys.path so `swarmllm` package is importable
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from swarmllm.config import Config, InstanceProfile
+from swarmllm.core.orchestrator import run_swarm
 
 
 def main():
@@ -50,7 +53,6 @@ def main():
     if args.max_concurrent is not None:
         config.swarm.max_concurrent_agents = args.max_concurrent
     if args.instance_sizes is not None:
-        from config import InstanceProfile
         sizes = [int(s.strip()) for s in args.instance_sizes.split(",")]
         # Auto-generate diverse profiles from sizes
         tightness_values = [0.4, 0.6, 0.8, 0.5, 0.7]  # cycle through if more than 3

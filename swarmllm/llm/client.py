@@ -12,8 +12,8 @@ Supports multiple Ollama instances (round-robin) for multi-GPU setups.
 import asyncio
 import itertools
 import aiohttp
-from config import LLMConfig
-from token_tracker import TokenUsage
+from swarmllm.config import LLMConfig
+from swarmllm.tracking.token_tracker import TokenUsage
 
 MAX_RETRIES = 5
 RETRY_BACKOFF = [5, 15, 30, 60, 60]  # seconds between retries

@@ -9,6 +9,9 @@ import os
 import re
 from datetime import datetime
 
+# Ensure project root is on sys.path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 
 def get_models():
     """Get list of available Ollama models with sizes."""
@@ -207,7 +210,7 @@ def main():
         return
 
     # Install extra pip packages for agents
-    from config import SandboxConfig
+    from swarmllm.config import SandboxConfig
     extra_pkgs = SandboxConfig().pip_packages
     if extra_pkgs:
         print(f"\n  Installing agent packages: {', '.join(extra_pkgs)}")
@@ -258,7 +261,7 @@ def main():
     print()
 
     cmd = [
-        sys.executable, "run.py",
+        sys.executable, os.path.join(os.path.dirname(__file__), "run.py"),
         "--coordinator-model", coord_model,
         "--agent-model", agent_model,
         "--agents", agents,

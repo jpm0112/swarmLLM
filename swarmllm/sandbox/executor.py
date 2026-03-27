@@ -17,7 +17,7 @@ import tempfile
 import os
 from pathlib import Path
 
-from config import SandboxConfig
+from swarmllm.config import SandboxConfig
 
 
 def execute_agent_code(
