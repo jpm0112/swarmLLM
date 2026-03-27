@@ -1,0 +1,32 @@
+name = "vllm-single-node"
+kind = "vllm"
+request_timeout = 300
+default_max_concurrent_agents = 12
+
+[coordinator]
+model = "qwen2.5-coder-14b"
+temperature = 0.4
+max_tokens = 8192
+
+[worker]
+model = "qwen2.5-coder-14b"
+temperature = 0.7
+max_tokens = 4096
+
+[[coordinator_endpoints]]
+label = "vllm-primary"
+base_url = "http://127.0.0.1:8000/v1"
+api_key_env = "SWARMLLM_VLLM_API_KEY"
+
+[[worker_endpoints]]
+label = "vllm-primary"
+base_url = "http://127.0.0.1:8000/v1"
+api_key_env = "SWARMLLM_VLLM_API_KEY"
+weight = 1
+
+# Optional multi-instance worker pool:
+# [[worker_endpoints]]
+# label = "vllm-secondary"
+# base_url = "http://127.0.0.1:8001/v1"
+# api_key_env = "SWARMLLM_VLLM_API_KEY"
+# weight = 1

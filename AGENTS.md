@@ -34,7 +34,7 @@ This repository is a research codebase for a coordinator-led swarm of LLM agents
   - token tracking and prompt logging helpers
   - sandbox success and failure paths
   - response parsing in agent and coordinator workflows
-- Avoid requiring a live Ollama server in the default test suite. Mock or isolate LLM calls when testing orchestration behavior.
+- Avoid requiring a live model server in the default test suite. Mock or isolate Ollama/vLLM-compatible calls when testing orchestration behavior.
 - Run `uv run pytest` before wrapping up substantive changes.
 
 ## Code Organization Guidelines

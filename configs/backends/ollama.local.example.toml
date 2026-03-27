@@ -1,0 +1,32 @@
+name = "ollama-local"
+kind = "ollama"
+request_timeout = 300
+default_max_concurrent_agents = 5
+
+[coordinator]
+model = "qwen2.5-coder:14b"
+temperature = 0.4
+max_tokens = 8192
+
+[worker]
+model = "qwen2.5-coder:14b"
+temperature = 0.7
+max_tokens = 4096
+
+[[coordinator_endpoints]]
+label = "ollama-primary"
+base_url = "http://127.0.0.1:11434/v1"
+api_key = "ollama"
+
+[[worker_endpoints]]
+label = "ollama-primary"
+base_url = "http://127.0.0.1:11434/v1"
+api_key = "ollama"
+weight = 1
+
+# Optional second local Ollama instance for worker traffic:
+# [[worker_endpoints]]
+# label = "ollama-secondary"
+# base_url = "http://127.0.0.1:11435/v1"
+# api_key = "ollama"
+# weight = 1

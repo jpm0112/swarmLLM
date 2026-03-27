@@ -4,6 +4,8 @@ SwarmLLM is a research prototype for running a coordinator-guided swarm of LLM a
 
 Today the repo is focused on a job scheduling benchmark: agents generate Python scheduling heuristics, the sandbox executes them, and the orchestrator scores them across multiple problem instances with different sizes and deadline tightness.
 
+The inference layer now targets a unified OpenAI-compatible runtime surface, with backend profiles for `ollama`, `vllm-metal`, and `vllm`. The orchestration layer uses PydanticAI with typed coordinator and worker outputs while preserving the existing shared-log swarm loop.
+
 ## Goal
 
 The design in [docs/DESIGN.md](docs/DESIGN.md) centers on three ideas:
@@ -30,14 +32,28 @@ Run the swarm from the project entry point:
 
 ```bash
 uv run swarmllm --help
-uv run swarmllm --agents 10 --iterations 3
+uv run swarmllm --backend-profile configs/backends/ollama.local.example.toml --agents 10 --iterations 3
 ```
 
 You can also run the script module directly:
 
 ```bash
-uv run python -m scripts.run --agents 10 --iterations 3
+uv run python -m scripts.run --backend-profile configs/backends/vllm.single-node.example.toml --agents 10 --iterations 3
 ```
+
+## Backends
+
+- `ollama` is the default local-iteration and Windows-friendly path.
+- `vllm-metal` is the Apple Silicon path for higher local throughput on macOS.
+- `vllm` is the Linux/server/cluster/cloud path for higher parallel agent throughput.
+
+App dependencies live in this repo. Model servers are external runtimes:
+
+- Ollama: run an OpenAI-compatible Ollama server locally.
+- vLLM Metal: install and run the Apple Silicon `vllm` CLI from the documented `~/.venv-vllm-metal` environment.
+- vLLM: run a standard `vllm serve` deployment locally or remotely.
+
+Example backend profiles live in `configs/backends/`, and example `vllm serve` YAML files live in `configs/vllm/`.
 
 ## Current Architecture
 
@@ -46,6 +62,8 @@ uv run python -m scripts.run --agents 10 --iterations 3
 - `swarmllm/problems/` contains optimization problem definitions and evaluation helpers.
 - `swarmllm/sandbox/` runs agent-generated code under restrictions.
 - `swarmllm/llm/` contains the LLM client wrapper.
+- `configs/backends/` contains backend profile examples for Ollama, vLLM Metal, and vLLM.
+- `configs/vllm/` contains `vllm serve` YAML templates.
 - `swarmllm/tracking/` stores shared-log, prompt-log, and token-tracking helpers.
 - `tests/` holds deterministic unit tests for local development and regression protection.
 
@@ -57,6 +75,10 @@ swarmLLM/
 ├── README.md
 ├── docs/
 │   └── DESIGN.md
+│   └── LLM_INFRA_SPEC.md
+├── configs/
+│   ├── backends/
+│   └── vllm/
 ├── scripts/
 │   ├── run.py
 │   └── setup_run.py
@@ -77,3 +99,5 @@ swarmLLM/
 - Use `uv run ...` for scripts, CLIs, and tests so commands run inside the managed environment.
 - Add or update tests whenever behavior changes, especially in `swarmllm/problems`, `swarmllm/sandbox`, `swarmllm/tracking`, and parser-heavy logic in `swarmllm/core`.
 - Keep the deterministic core testable without requiring a live Ollama server.
+- Keep backend selection in TOML profiles instead of scattering endpoint details through code.
+- Treat `vllm` and `vllm-metal` as external serving runtimes rather than mandatory Python package dependencies for repo users.
