@@ -19,7 +19,7 @@ from prompt_logger import PromptLogger
 
 COORDINATOR_SYSTEM_PROMPT = """\
 You are the coordinator of a swarm of {num_agents} optimization agents working on
-a job scheduling problem (minimize total tardiness).
+{problem_description}.
 
 Each agent's code is tested on {num_instances} problem instances of different sizes
 and characteristics. Scores are reported per instance plus an aggregate (sum).
@@ -57,7 +57,7 @@ Agent 2 [EXPLORE]: <specific direction>
 
 INITIAL_SYSTEM_PROMPT = """\
 You are the coordinator of a swarm of {num_agents} optimization agents working on
-a job scheduling problem (minimize total tardiness).
+{problem_description}.
 
 Each agent's code is tested on {num_instances} problem instances of different sizes
 and characteristics. Scores are reported per instance plus an aggregate (sum).
@@ -83,6 +83,7 @@ Agent 2: <specific direction>
 
 async def get_initial_directions(
     config: Config,
+    problem_description: str = "",
     prompt_logger: PromptLogger | None = None,
 ) -> tuple[list[str], TokenUsage]:
     """Ask the coordinator LLM for initial directions (iteration 1)."""
@@ -90,7 +91,8 @@ async def get_initial_directions(
 
     system_prompt = INITIAL_SYSTEM_PROMPT.format(
         num_agents=num_agents,
-        num_instances=len(config.problem.instances),
+        num_instances=len(config.problem.instance_profiles),
+        problem_description=problem_description,
     )
 
     prompt = f"""This is the first iteration. No results yet.
@@ -121,6 +123,7 @@ async def get_next_directions(
     iteration: int,
     log_content: str,
     config: Config,
+    problem_description: str = "",
     prompt_logger: PromptLogger | None = None,
     top_solutions: list[dict] | None = None,
 ) -> tuple[str, list[str]]:
@@ -137,7 +140,8 @@ async def get_next_directions(
         num_agents=num_agents,
         num_explore=num_explore,
         num_exploit=num_exploit,
-        num_instances=len(config.problem.instances),
+        num_instances=len(config.problem.instance_profiles),
+        problem_description=problem_description,
     )
 
     # Build top solutions section

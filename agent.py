@@ -10,65 +10,10 @@ proposes a solution approach, writes code, and tests it.
 import re
 import time
 from config import Config
-from problem import ProblemInstance, evaluate_schedule
+from problems import ProblemBase, ProblemInstance
 from sandbox import execute_agent_code
 from llm_client import chat_completion
 from prompt_logger import PromptLogger
-
-
-FIX_PROMPT = """\
-Your code failed when tested.
-
-## Error:
-```
-{error}
-```
-
-## Your original code:
-```python
-{code}
-```
-
-Fix the code so it works correctly. The function must return a valid permutation
-of ALL job IDs — every job exactly once, no duplicates, no missing.
-Your code will be tested on multiple instances of different sizes.
-
-Output your fixed code in this exact format:
-
-APPROACH: <one-line description of your approach>
-
-```python
-<your fixed code here>
-```
-
-NOTES: <what you fixed>
-"""
-
-
-AGENT_SYSTEM_PROMPT = """\
-You are an optimization coder working on a job scheduling problem.
-You will be given a problem description and a research direction to explore.
-Your job is to write a Python function that produces a good schedule.
-
-RULES:
-1. You MUST define a function: def schedule(jobs: list[dict]) -> list[int]
-2. Each job dict has keys: "id", "processing_time", "due_date"
-3. Return a list of job IDs (a permutation of all job IDs) — the order jobs should be processed
-4. The goal is to MINIMIZE total tardiness (lower is better)
-5. Prefer standard library and already-installed packages when possible. You may import any pip package (it will be auto-installed). Already installed: {pip_packages}. Blocked: os, sys, subprocess, socket, and other system/network modules.
-6. Your code has a {timeout}s time limit.
-7. Be creative and try novel approaches based on your assigned direction
-
-Output your response in this exact format:
-
-APPROACH: <one-line description of your approach>
-
-```python
-<your complete code here, must define schedule(jobs) function>
-```
-
-NOTES: <brief notes on why this might work or any caveats>
-"""
 
 
 async def run_agent(
@@ -76,6 +21,7 @@ async def run_agent(
     direction: str,
     problems: list[tuple[str, ProblemInstance]],
     config: Config,
+    problem: ProblemBase,
     iteration: int = 0,
     prompt_logger: PromptLogger | None = None,
     top_solutions: list[dict] | None = None,
@@ -84,30 +30,38 @@ async def run_agent(
     Run a single worker agent.
 
     problems: list of (instance_name, ProblemInstance) tuples.
+    problem: the ProblemBase implementation for evaluation and prompts.
     Tests the generated code on all problem instances.
     Returns a dict with: agent_id, direction, approach, code, score, success, error, notes,
                          instance_scores, instance_errors
     """
     # Show smallest instance as example, note that code will be tested on diverse instances
     example_name, example_problem = problems[0]  # first (smallest) as example
-    instance_desc = ", ".join(f"{name} ({len(p.jobs)} jobs)" for name, p in problems)
+    num_items = len(problem.prepare_input(example_problem))
+    instance_desc = ", ".join(
+        f"{name} ({len(problem.prepare_input(p))} items)" for name, p in problems
+    )
 
-    prompt = f"""{example_problem.to_description()}
+    problem_desc = problem.get_agent_user_prompt(example_problem, instance_desc)
+
+    prompt = f"""{problem_desc}
 
 Your code will be tested on {len(problems)} diverse instances: {instance_desc}.
-They vary in size, deadline tightness, and processing time ranges.
+They vary in size and characteristics.
 Write a general algorithm — do not hardcode for a specific instance.
 
 ## Your Research Direction
 
 {direction}
 
-Think carefully about this direction. Design a scheduling algorithm that follows
+Think carefully about this direction. Design an algorithm that follows
 this approach. Write clean, working Python code.
 """
 
     pip_list = ", ".join(config.sandbox.pip_packages) if config.sandbox.pip_packages else "none"
-    system_prompt = AGENT_SYSTEM_PROMPT.format(timeout=config.sandbox.timeout, pip_packages=pip_list)
+    system_prompt = problem.get_agent_system_prompt(
+        timeout=config.sandbox.timeout, pip_packages=pip_list
+    )
 
     # Ask the LLM to generate a solution
     token_usage = None
@@ -168,18 +122,19 @@ this approach. Write clean, working Python code.
             "retries_used": 0,
         }
 
+    function_name = problem.get_function_name()
+
     # Pre-test on all instances — if any fails, give LLM retries with error feedback
     def _pre_test(test_code):
         """Test code on all instances, return first error or None."""
-        for inst_name, problem in problems:
-            job_data = [
-                {"id": j.id, "processing_time": j.processing_time, "due_date": j.due_date}
-                for j in problem.jobs
-            ]
-            result = execute_agent_code(test_code, job_data, config.sandbox)
+        for inst_name, inst in problems:
+            input_data = problem.prepare_input(inst)
+            result = execute_agent_code(test_code, input_data, config.sandbox,
+                                        function_name=function_name)
             if not result["success"]:
                 return f"[{inst_name}] {result['error']}"
-            eval_check = evaluate_schedule(problem, result["schedule"])
+            solution = problem.extract_solution(result)
+            eval_check = problem.evaluate(inst, solution)
             if not eval_check["valid"]:
                 return f"[{inst_name}] {eval_check['error']}"
         return None
@@ -194,10 +149,7 @@ this approach. Write clean, working Python code.
         retries_used += 1
 
         # Feed the error back to the LLM
-        fix_prompt = FIX_PROMPT.format(
-            error=pre_error[:1000],
-            code=code,
-        )
+        fix_prompt = problem.get_fix_prompt(error=pre_error, code=code)
         try:
             fix_start = time.time()
             fix_response, fix_tokens = await chat_completion(
@@ -239,13 +191,11 @@ this approach. Write clean, working Python code.
     instance_errors = {}
     first_error = None
 
-    for inst_name, problem in problems:
-        job_data = [
-            {"id": j.id, "processing_time": j.processing_time, "due_date": j.due_date}
-            for j in problem.jobs
-        ]
+    for inst_name, inst in problems:
+        input_data = problem.prepare_input(inst)
 
-        exec_result = execute_agent_code(code, job_data, config.sandbox)
+        exec_result = execute_agent_code(code, input_data, config.sandbox,
+                                         function_name=function_name)
 
         if not exec_result["success"]:
             instance_errors[inst_name] = exec_result["error"]
@@ -253,8 +203,8 @@ this approach. Write clean, working Python code.
                 first_error = exec_result["error"]
             continue
 
-        schedule = exec_result["schedule"]
-        eval_result = evaluate_schedule(problem, schedule)
+        solution = problem.extract_solution(exec_result)
+        eval_result = problem.evaluate(inst, solution)
 
         if not eval_result["valid"]:
             instance_errors[inst_name] = eval_result["error"]
@@ -262,7 +212,7 @@ this approach. Write clean, working Python code.
                 first_error = eval_result["error"]
             continue
 
-        instance_scores[inst_name] = eval_result["total_tardiness"]
+        instance_scores[inst_name] = eval_result["score"]
 
     exec_time = time.time() - exec_start
 

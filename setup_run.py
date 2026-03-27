@@ -88,10 +88,37 @@ def ask(prompt, default, explanation=""):
     return val if val else str(default)
 
 
+def pick_problem():
+    """Let user pick a problem type."""
+    # Discover available problems
+    available = ["job_scheduling"]
+    print("\n  Problem type:")
+    print("  ----------------------------------------")
+    for i, p in enumerate(available, 1):
+        marker = " *" if i == 1 else ""
+        print(f"    {i}) {p}{marker}")
+    print("  ----------------------------------------")
+    while True:
+        choice = input(f"  Pick a number [1]: ").strip()
+        if choice == "":
+            return available[0]
+        try:
+            idx = int(choice)
+            if 1 <= idx <= len(available):
+                return available[idx - 1]
+        except ValueError:
+            pass
+        print("  Invalid choice, try again.")
+
+
 def main():
     print("=" * 60)
     print("  SwarmLLM — Run Setup")
     print("=" * 60)
+
+    # Pick problem type
+    problem_type = pick_problem()
+    print(f"  -> {problem_type}")
 
     models, sizes = get_models()
     if not models:
@@ -179,7 +206,7 @@ def main():
     timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     safe_coord = re.sub(r'[^a-zA-Z0-9._-]', '_', coord_model)
     safe_agent = re.sub(r'[^a-zA-Z0-9._-]', '_', agent_model)
-    outdir = os.path.join("runs", f"{timestamp}_coord-{safe_coord}_agent-{safe_agent}_{agents}agents_{iterations}iter")
+    outdir = os.path.join("runs", f"{timestamp}_{problem_type}_coord-{safe_coord}_agent-{safe_agent}_{agents}agents_{iterations}iter")
     os.makedirs(outdir, exist_ok=True)
 
     dual_gpu = use_dual.lower() == "y"
@@ -187,6 +214,7 @@ def main():
     print()
     print("=" * 60)
     print("  Configuration:")
+    print(f"    Problem type:  {problem_type}")
     print(f"    Coordinator:   {coord_model}")
     print(f"    Agent model:   {agent_model}")
     print(f"    Agents:        {agents}")
@@ -259,6 +287,7 @@ def main():
 
     cmd = [
         sys.executable, "run.py",
+        "--problem", problem_type,
         "--coordinator-model", coord_model,
         "--agent-model", agent_model,
         "--agents", agents,

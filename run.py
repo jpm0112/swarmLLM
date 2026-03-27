@@ -4,6 +4,7 @@ SwarmLLM Entry Point
 Usage:
     python run.py
     python run.py --agents 10 --iterations 3
+    python run.py --problem job_scheduling --instance-sizes 20,50,100
     python run.py --coordinator-model qwen2.5-coder:14b --agent-model qwen2.5:3b
 """
 
@@ -18,6 +19,8 @@ from orchestrator import run_swarm
 
 def main():
     parser = argparse.ArgumentParser(description="SwarmLLM — Multi-Agent Optimization")
+    parser.add_argument("--problem", type=str, default=None,
+                        help="Problem type (default: job_scheduling). Available: job_scheduling")
     parser.add_argument("--coordinator-model", type=str, default=None, help="Ollama model for the coordinator")
     parser.add_argument("--agent-model", type=str, default=None, help="Ollama model for worker agents")
     parser.add_argument("--agents", type=int, default=None, help="Number of agents (default: 20)")
@@ -36,6 +39,14 @@ def main():
 
     config = Config()
 
+    # Apply problem type override first (affects how instance-sizes is parsed)
+    if args.problem is not None:
+        config.problem.problem_type = args.problem
+
+    # Load the problem module for profile parsing
+    from problems import load_problem
+    problem = load_problem(config.problem.problem_type)
+
     # Apply overrides
     if args.coordinator_model is not None:
         config.llm.coordinator_model = args.coordinator_model
@@ -50,22 +61,9 @@ def main():
     if args.max_concurrent is not None:
         config.swarm.max_concurrent_agents = args.max_concurrent
     if args.instance_sizes is not None:
-        from config import InstanceProfile
-        sizes = [int(s.strip()) for s in args.instance_sizes.split(",")]
-        # Auto-generate diverse profiles from sizes
-        tightness_values = [0.4, 0.6, 0.8, 0.5, 0.7]  # cycle through if more than 3
-        pt_ranges = [(1, 15), (1, 20), (5, 30), (1, 25), (3, 20)]
-        config.problem.instances = []
-        for i, size in enumerate(sizes):
-            t = tightness_values[i % len(tightness_values)]
-            min_pt, max_pt = pt_ranges[i % len(pt_ranges)]
-            config.problem.instances.append(InstanceProfile(
-                name=f"{size}jobs_t{t}",
-                num_jobs=size,
-                min_processing_time=min_pt,
-                max_processing_time=max_pt,
-                due_date_tightness=t,
-            ))
+        config.problem.instance_profiles = problem.get_instance_profiles(
+            args.instance_sizes, config.problem.seed
+        )
     if args.seed is not None:
         config.problem.seed = args.seed
     if args.timeout is not None:
@@ -75,11 +73,16 @@ def main():
     if args.base_urls is not None:
         config.llm.base_urls = [u.strip() for u in args.base_urls.split(",")]
 
+    # If no profiles set, use problem defaults
+    if not config.problem.instance_profiles:
+        config.problem.instance_profiles = problem.get_default_profiles()
+
     # Ensure output dir exists
     os.makedirs(args.output_dir, exist_ok=True)
 
     # Print config
     print(f"Config:")
+    print(f"  Problem type:      {config.problem.problem_type}")
     print(f"  Coordinator model: {config.llm.coordinator_model}")
     print(f"  Agent model: {config.llm.agent_model}")
     print(f"  Agents: {config.swarm.num_agents}")
@@ -87,10 +90,9 @@ def main():
     print(f"  Explore ratio: {config.swarm.explore_ratio}")
     print(f"  Max concurrent: {config.swarm.max_concurrent_agents}")
     print(f"  Agent retries: {config.swarm.agent_retries}")
-    print(f"  Instances: {len(config.problem.instances)}")
-    for inst in config.problem.instances:
-        print(f"    {inst.name}: {inst.num_jobs} jobs, tightness={inst.due_date_tightness}, "
-              f"pt={inst.min_processing_time}-{inst.max_processing_time}")
+    print(f"  Instances: {len(config.problem.instance_profiles)}")
+    for inst in config.problem.instance_profiles:
+        print(f"    {inst.name}: {inst.params}")
     print(f"  Ollama URLs: {config.llm.base_urls}")
     print(f"  Seed: {config.problem.seed}")
     print()

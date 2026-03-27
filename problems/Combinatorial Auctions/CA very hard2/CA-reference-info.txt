@@ -1,0 +1,2 @@
+Please check the Distributional MIPLIB website for citation and description of this domain:
+https://sites.google.com/usc.edu/distributional-miplib/combinatorial-auctions
