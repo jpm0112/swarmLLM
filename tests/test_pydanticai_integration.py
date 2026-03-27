@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import textwrap
 from typing import Any
 
 import httpx
 import pytest
 from pydantic_ai import Agent, ModelResponse, ToolCallPart
+from pydantic_ai.messages import TextPart
 from pydantic_ai.models.function import FunctionModel
 from pydantic_ai.models import override_allow_model_requests
 from pydantic_ai.models.test import TestModel
@@ -60,6 +62,57 @@ def test_coordinator_agent_supports_typed_output_with_test_model():
 
     assert isinstance(result.output, CoordinatorRoundPlan)
     assert len(result.output.directions) == 2
+
+
+def test_coordinator_agent_retries_after_malformed_text_output():
+    clear_caches()
+    config = Config()
+    endpoint = LLMEndpoint(base_url="http://coord-retry/v1", api_key="test")
+    agent = build_coordinator_agent(config, endpoint, "coord retry system prompt")
+    calls = {"count": 0}
+
+    def function_model(messages: list[Any], info: Any) -> ModelResponse:
+        del messages, info
+        calls["count"] += 1
+        if calls["count"] == 1:
+            return ModelResponse(
+                parts=[
+                    TextPart(
+                        content=textwrap.dedent(
+                            """\
+                            <tools>
+                            {"name": "final_result", "arguments": {"analysis": "bad", "directions": []}}
+                            </tools>
+                            """
+                        ).strip()
+                    )
+                ]
+            )
+
+        return ModelResponse(
+            parts=[
+                ToolCallPart(
+                    tool_name="final_result",
+                    args={
+                        "analysis": "Recovered after retry.",
+                        "directions": [
+                            {"agent_id": 0, "mode": "explore", "direction": "Try EDD variants"}
+                        ],
+                    },
+                    tool_call_id="coord-retry",
+                )
+            ]
+        )
+
+    try:
+        with agent.override(model=FunctionModel(function_model)):
+            result = agent.run_sync("plan the next round")
+    finally:
+        clear_caches()
+
+    assert result.output.analysis == "Recovered after retry."
+    assert len(result.output.directions) == 1
+    assert calls["count"] == 2
 
 
 @pytest.mark.anyio

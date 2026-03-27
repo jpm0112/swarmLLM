@@ -56,6 +56,9 @@ Return structured output with:
 - approach: a short one-line description of the algorithm
 - code: the complete Python source defining schedule(jobs)
 - notes: brief rationale, caveats, or what you changed on a retry
+
+Return only the structured result. Do not emit XML tags, <tools> wrappers,
+markdown fences, or any prose outside the final structured output.
 """
 
 

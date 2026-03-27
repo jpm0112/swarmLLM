@@ -143,7 +143,7 @@ max_tokens = 8192
 
 [worker]
 model = "model-alias"
-temperature = 0.7
+temperature = 1.0
 max_tokens = 4096
 
 [[coordinator_endpoints]]

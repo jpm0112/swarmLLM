@@ -25,6 +25,9 @@ Return structured output with:
 - analysis: a short summary of what is working, failing, or still unexplored
 - directions: one assignment per agent with agent_id, mode, and direction
 
+Return only the structured result. Do not emit XML tags, <tools> wrappers,
+markdown fences, or any prose outside the final structured output.
+
 Modes:
 - explore: try a meaningfully new idea or underexplored algorithm family
 - exploit: refine or combine the strongest-performing approaches so far
@@ -45,8 +48,7 @@ All assignments should use mode "explore" because the swarm is still mapping out
 the search space.
 
 Each direction should be concrete and actionable, with broad diversity across
-algorithmic families such as priority heuristics, local search, metaheuristics,
-hybrid methods, and mathematical or constraint-inspired approaches.
+algorithmic families.
 """
     usage = RunUsage()
     result = await _request_coordinator_plan(

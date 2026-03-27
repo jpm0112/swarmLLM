@@ -52,7 +52,7 @@ class LLMConfig:
             )
         ]
     )
-    temperature_worker: float = 0.7
+    temperature_worker: float = 0.4
     temperature_coordinator: float = 0.4
     max_tokens_worker: int = 4096
     max_tokens_coordinator: int = 8192
@@ -103,7 +103,7 @@ class SandboxConfig:
     ])
     # Extra pip packages to install and make available to agents
     pip_packages: list[str] = field(default_factory=lambda: [
-        "numpy", "scipy", "networkx",
+        "numpy", "scipy", "networkx", "gurobipy",
     ])
 
 
