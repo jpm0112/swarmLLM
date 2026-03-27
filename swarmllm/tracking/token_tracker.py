@@ -9,7 +9,9 @@ Provides per-call, per-iteration, and per-role (agent vs coordinator) breakdowns
 
 import json
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+
+from pydantic_ai.usage import RunUsage
 
 
 @dataclass
@@ -18,6 +20,25 @@ class TokenUsage:
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
+
+    @classmethod
+    def from_run_usage(cls, usage: RunUsage | None) -> "TokenUsage | None":
+        """Convert a PydanticAI RunUsage object into tracker-friendly totals."""
+        if usage is None:
+            return None
+        prompt_tokens = (
+            usage.input_tokens
+            + usage.cache_write_tokens
+            + usage.cache_read_tokens
+            + usage.input_audio_tokens
+            + usage.cache_audio_read_tokens
+        )
+        completion_tokens = usage.output_tokens + usage.output_audio_tokens
+        return cls(
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=prompt_tokens + completion_tokens,
+        )
 
 
 class TokenTracker:
