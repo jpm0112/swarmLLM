@@ -21,7 +21,8 @@ class LLMConfig:
     temperature_coordinator: float = 0.4
     max_tokens_worker: int = 4096
     max_tokens_coordinator: int = 8192
-    request_timeout: int = 300  # seconds
+    request_timeout: int = 300  # seconds for agent calls
+    coordinator_request_timeout: int = 600  # seconds for coordinator (larger prompts)
 
 
 @dataclass

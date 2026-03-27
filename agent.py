@@ -17,7 +17,7 @@ from prompt_logger import PromptLogger
 
 
 FIX_PROMPT = """\
-Your code failed when tested on the smallest instance ({num_jobs} jobs).
+Your code failed when tested.
 
 ## Error:
 ```
@@ -31,6 +31,7 @@ Your code failed when tested on the smallest instance ({num_jobs} jobs).
 
 Fix the code so it works correctly. The function must return a valid permutation
 of ALL job IDs — every job exactly once, no duplicates, no missing.
+Your code will be tested on multiple instances of different sizes.
 
 Output your fixed code in this exact format:
 
@@ -54,7 +55,7 @@ RULES:
 2. Each job dict has keys: "id", "processing_time", "due_date"
 3. Return a list of job IDs (a permutation of all job IDs) — the order jobs should be processed
 4. The goal is to MINIMIZE total tardiness (lower is better)
-5. You may import any pip package (it will be auto-installed). Already installed: {pip_packages}. Blocked: os, sys, subprocess, socket, and other system/network modules.
+5. Prefer standard library and already-installed packages when possible. You may import any pip package (it will be auto-installed). Already installed: {pip_packages}. Blocked: os, sys, subprocess, socket, and other system/network modules.
 6. Your code has a {timeout}s time limit.
 7. Be creative and try novel approaches based on your assigned direction
 
@@ -139,6 +140,7 @@ this approach. Write clean, working Python code.
             "token_usage": None,
             "llm_time": 0.0,
             "exec_time": 0.0,
+            "retries_used": 0,
         }
 
     # Log the prompt and response
@@ -163,31 +165,36 @@ this approach. Write clean, working Python code.
             "token_usage": token_usage,
             "llm_time": llm_time,
             "exec_time": 0.0,
+            "retries_used": 0,
         }
 
-    # Pre-test on smallest instance — if it fails, give LLM one retry with error feedback
-    smallest_name, smallest_problem = problems[0]
-    smallest_jobs = [
-        {"id": j.id, "processing_time": j.processing_time, "due_date": j.due_date}
-        for j in smallest_problem.jobs
-    ]
+    # Pre-test on all instances — if any fails, give LLM retries with error feedback
+    def _pre_test(test_code):
+        """Test code on all instances, return first error or None."""
+        for inst_name, problem in problems:
+            job_data = [
+                {"id": j.id, "processing_time": j.processing_time, "due_date": j.due_date}
+                for j in problem.jobs
+            ]
+            result = execute_agent_code(test_code, job_data, config.sandbox)
+            if not result["success"]:
+                return f"[{inst_name}] {result['error']}"
+            eval_check = evaluate_schedule(problem, result["schedule"])
+            if not eval_check["valid"]:
+                return f"[{inst_name}] {eval_check['error']}"
+        return None
 
-    pre_result = execute_agent_code(code, smallest_jobs, config.sandbox)
-    pre_error = None
-    if not pre_result["success"]:
-        pre_error = pre_result["error"]
-    else:
-        eval_check = evaluate_schedule(smallest_problem, pre_result["schedule"])
-        if not eval_check["valid"]:
-            pre_error = eval_check["error"]
+    pre_error = _pre_test(code)
 
+    retries_used = 0
     for retry in range(config.swarm.agent_retries):
         if pre_error is None:
             break  # pre-test passed, no retry needed
 
+        retries_used += 1
+
         # Feed the error back to the LLM
         fix_prompt = FIX_PROMPT.format(
-            num_jobs=len(smallest_problem.jobs),
             error=pre_error[:1000],
             code=code,
         )
@@ -219,15 +226,8 @@ this approach. Write clean, working Python code.
                 if fix_notes:
                     notes = fix_notes + f" (fixed after pre-test retry {retry+1})"
 
-                # Re-test on smallest instance
-                pre_result = execute_agent_code(code, smallest_jobs, config.sandbox)
-                pre_error = None
-                if not pre_result["success"]:
-                    pre_error = pre_result["error"]
-                else:
-                    eval_check = evaluate_schedule(smallest_problem, pre_result["schedule"])
-                    if not eval_check["valid"]:
-                        pre_error = eval_check["error"]
+                # Re-test on all instances
+                pre_error = _pre_test(code)
             else:
                 break  # couldn't parse fixed code, stop retrying
         except Exception:
@@ -285,6 +285,7 @@ this approach. Write clean, working Python code.
             "token_usage": token_usage,
             "llm_time": llm_time,
             "exec_time": exec_time,
+            "retries_used": retries_used,
         }
 
     aggregate_score = sum(instance_scores.values())
@@ -318,6 +319,7 @@ this approach. Write clean, working Python code.
         "token_usage": token_usage,
         "llm_time": llm_time,
         "exec_time": exec_time,
+        "retries_used": retries_used,
     }
 
 

@@ -204,6 +204,7 @@ async def run_swarm(config: Config, output_dir: str = "."):
                 instance_errors=result.get("instance_errors"),
                 llm_time=result.get("llm_time"),
                 exec_time=result.get("exec_time"),
+                retries_used=result.get("retries_used", 0),
             )
 
             if result["success"]:
@@ -295,7 +296,6 @@ async def _run_agents_parallel(
 
     async def run_with_limit(agent_id, direction):
         async with semaphore:
-            print(f"    Agent {agent_id:2d}: {direction[:100]}...")
             agent_start = time.time()
             result = await run_agent(
                 agent_id, direction, problems, config,
@@ -306,14 +306,17 @@ async def _run_agents_parallel(
             result["runtime"] = elapsed
             llm_t = result.get("llm_time", 0)
             exec_t = result.get("exec_time", 0)
-            timing = f"LLM: {llm_t:.1f}s, exec: {exec_t:.1f}s, total: {elapsed:.1f}s"
+            retries = result.get("retries_used", 0)
+            retry_str = f", retries: {retries}" if retries > 0 else ""
+            timing = f"LLM: {llm_t:.1f}s, exec: {exec_t:.1f}s{retry_str}, total: {elapsed:.1f}s"
+            short_dir = direction[:80]
             if result["success"]:
-                status = f"score={result['score']} [{timing}]"
+                status = f"score={result['score']} [{timing}] — {short_dir}"
             else:
                 reason = _categorize_failure(result.get("error", ""))
                 result["failure_reason"] = reason
-                status = f"FAILED ({reason}) [{timing}]"
-            print(f"    Agent {agent_id:2d} done: {status}")
+                status = f"FAILED ({reason}) [{timing}] — {short_dir}"
+            print(f"    Agent {agent_id:2d}: {status}")
             return result
 
     tasks = [
