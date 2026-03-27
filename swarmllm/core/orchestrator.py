@@ -31,6 +31,8 @@ from swarmllm.problems.scheduling import (
 )
 from swarmllm.core.agent import run_agent
 from swarmllm.core.coordinator import get_initial_directions, get_next_directions
+from swarmllm.llm.health import validate_backend_or_raise
+from swarmllm.llm.routing import EndpointRouter
 from swarmllm.tracking.shared_log import SharedLog
 from swarmllm.tracking.prompt_logger import PromptLogger
 from swarmllm.tracking.token_tracker import TokenTracker
@@ -41,6 +43,12 @@ async def run_swarm(config: Config, output_dir: str = "."):
     print("=" * 60)
     print("  SwarmLLM — Multi-Agent Optimization")
     print("=" * 60)
+    print()
+
+    print(f"[0/3] Validating {config.llm.backend_kind} backend profile...")
+    await validate_backend_or_raise(config.llm)
+    router = EndpointRouter(config.llm)
+    print("  Backend validation passed.")
     print()
 
     # 1. Generate problem instances (one per profile)
@@ -140,6 +148,7 @@ async def run_swarm(config: Config, output_dir: str = "."):
             print("  Coordinator assigning initial directions...")
             directions, coord_tokens = await get_initial_directions(
                 config=config,
+                endpoint=router.coordinator_endpoint(),
                 prompt_logger=prompt_logger,
             )
             if coord_tokens:
@@ -152,6 +161,7 @@ async def run_swarm(config: Config, output_dir: str = "."):
                 iteration=iteration,
                 log_content=log_content,
                 config=config,
+                endpoint=router.coordinator_endpoint(),
                 prompt_logger=prompt_logger,
                 top_solutions=top_solutions,
             )
@@ -174,6 +184,7 @@ async def run_swarm(config: Config, output_dir: str = "."):
             directions=directions,
             problems=named_problems,
             config=config,
+            router=router,
             iteration=iteration,
             prompt_logger=prompt_logger,
             top_solutions=top_solutions,
@@ -286,6 +297,7 @@ async def _run_agents_parallel(
     directions: list[str],
     problems: list[tuple[str, ProblemInstance]],
     config: Config,
+    router: EndpointRouter,
     iteration: int = 0,
     prompt_logger: PromptLogger | None = None,
     top_solutions: list[dict] | None = None,
@@ -297,8 +309,10 @@ async def _run_agents_parallel(
         async with semaphore:
             print(f"    Agent {agent_id:2d}: {direction[:100]}...")
             agent_start = time.time()
+            endpoint = router.worker_endpoint()
             result = await run_agent(
                 agent_id, direction, problems, config,
+                endpoint=endpoint,
                 iteration=iteration, prompt_logger=prompt_logger,
                 top_solutions=top_solutions,
             )
@@ -483,8 +497,11 @@ def _print_final_summary(log, all_baselines, agg_baselines, best_score, best_app
     # Run configuration
     out()
     out("  RUN CONFIGURATION:")
+    out(f"    Backend kind:      {config.llm.backend_kind}")
     out(f"    Coordinator model: {config.llm.coordinator_model}")
     out(f"    Agent model:       {config.llm.agent_model}")
+    out(f"    Coord endpoint:    {config.llm.coordinator_endpoints[0].base_url}")
+    out(f"    Worker endpoints:  {', '.join(e.base_url for e in config.llm.worker_endpoints)}")
     out(f"    Agents per iter:   {config.swarm.num_agents}")
     out(f"    Max concurrent:    {config.swarm.max_concurrent_agents}")
     out(f"    Iterations:        {config.swarm.num_iterations}")

@@ -3,44 +3,38 @@ from __future__ import annotations
 """
 Worker Agent
 
-Each agent receives a direction from the coordinator,
-proposes a solution approach, writes code, and tests it.
+Each worker receives a direction from the coordinator, asks the configured
+OpenAI-compatible backend for a structured draft, executes the generated code
+in the sandbox, and reports scored results back to the orchestrator.
 """
 
-import re
 import time
-from swarmllm.config import Config
+
+from pydantic_ai import AgentRunResult
+from pydantic_ai.usage import RunUsage
+
+from swarmllm.config import Config, LLMEndpoint
+from swarmllm.llm.factory import build_worker_agent
+from swarmllm.llm.schemas import WorkerDraft
 from swarmllm.problems.scheduling import ProblemInstance, evaluate_schedule
 from swarmllm.sandbox.executor import execute_agent_code
-from swarmllm.llm.client import chat_completion
 from swarmllm.tracking.prompt_logger import PromptLogger
+from swarmllm.tracking.token_tracker import TokenUsage
 
 
 FIX_PROMPT = """\
-Your code failed when tested on the smallest instance ({num_jobs} jobs).
+Your previous draft failed when tested on the smallest instance ({num_jobs} jobs).
 
-## Error:
-```
+Error:
 {error}
-```
 
-## Your original code:
+Previous code:
 ```python
 {code}
 ```
 
-Fix the code so it works correctly. The function must return a valid permutation
-of ALL job IDs — every job exactly once, no duplicates, no missing.
-
-Output your fixed code in this exact format:
-
-APPROACH: <one-line description of your approach>
-
-```python
-<your fixed code here>
-```
-
-NOTES: <what you fixed>
+Revise the implementation so it returns a valid permutation of all job IDs,
+with no duplicates or omissions, while preserving the assigned research direction.
 """
 
 
@@ -49,24 +43,19 @@ You are an optimization coder working on a job scheduling problem.
 You will be given a problem description and a research direction to explore.
 Your job is to write a Python function that produces a good schedule.
 
-RULES:
-1. You MUST define a function: def schedule(jobs: list[dict]) -> list[int]
+Rules:
+1. You must define a function: def schedule(jobs: list[dict]) -> list[int]
 2. Each job dict has keys: "id", "processing_time", "due_date"
-3. Return a list of job IDs (a permutation of all job IDs) — the order jobs should be processed
-4. The goal is to MINIMIZE total tardiness (lower is better)
-5. You may import any pip package (it will be auto-installed). Already installed: {pip_packages}. Blocked: os, sys, subprocess, socket, and other system/network modules.
-6. Your code has a {timeout}s time limit.
-7. Be creative and try novel approaches based on your assigned direction
+3. Return a list of job IDs representing the full schedule order
+4. The goal is to minimize total tardiness (lower is better)
+5. You may import pip packages already available in the sandbox: {pip_packages}
+6. Dangerous system/network modules are blocked
+7. Your code has a {timeout}s time limit
 
-Output your response in this exact format:
-
-APPROACH: <one-line description of your approach>
-
-```python
-<your complete code here, must define schedule(jobs) function>
-```
-
-NOTES: <brief notes on why this might work or any caveats>
+Return structured output with:
+- approach: a short one-line description of the algorithm
+- code: the complete Python source defining schedule(jobs)
+- notes: brief rationale, caveats, or what you changed on a retry
 """
 
 
@@ -75,56 +64,53 @@ async def run_agent(
     direction: str,
     problems: list[tuple[str, ProblemInstance]],
     config: Config,
+    endpoint: LLMEndpoint,
     iteration: int = 0,
     prompt_logger: PromptLogger | None = None,
     top_solutions: list[dict] | None = None,
 ) -> dict:
     """
-    Run a single worker agent.
+    Run a single worker agent against all configured problem instances.
 
-    problems: list of (instance_name, ProblemInstance) tuples.
-    Tests the generated code on all problem instances.
-    Returns a dict with: agent_id, direction, approach, code, score, success, error, notes,
-                         instance_scores, instance_errors
+    Returns a dict with:
+        agent_id, direction, approach, code, score, success, error, notes,
+        instance_scores, instance_errors, token_usage, llm_time, exec_time
     """
-    # Show smallest instance as example, note that code will be tested on diverse instances
-    example_name, example_problem = problems[0]  # first (smallest) as example
-    instance_desc = ", ".join(f"{name} ({len(p.jobs)} jobs)" for name, p in problems)
+    del top_solutions  # Reserved for future exploit-agent prompt tuning.
 
+    _, example_problem = problems[0]
+    instance_desc = ", ".join(f"{name} ({len(problem.jobs)} jobs)" for name, problem in problems)
     prompt = f"""{example_problem.to_description()}
 
 Your code will be tested on {len(problems)} diverse instances: {instance_desc}.
 They vary in size, deadline tightness, and processing time ranges.
-Write a general algorithm — do not hardcode for a specific instance.
+Write a general algorithm and do not hardcode for a specific instance.
 
-## Your Research Direction
+## Research Direction
 
 {direction}
-
-Think carefully about this direction. Design a scheduling algorithm that follows
-this approach. Write clean, working Python code.
 """
 
     pip_list = ", ".join(config.sandbox.pip_packages) if config.sandbox.pip_packages else "none"
     system_prompt = AGENT_SYSTEM_PROMPT.format(timeout=config.sandbox.timeout, pip_packages=pip_list)
-
-    # Ask the LLM to generate a solution
-    token_usage = None
+    usage = RunUsage()
     llm_time = 0.0
+
     try:
-        llm_start = time.time()
-        response, token_usage = await chat_completion(
+        initial_start = time.time()
+        draft_result = await _request_worker_draft(
+            role="agent",
+            agent_id=agent_id,
+            iteration=iteration,
             prompt=prompt,
             system_prompt=system_prompt,
-            config=config.llm,
-            model=config.llm.agent_model,
-            temperature=config.llm.temperature_worker,
-            max_tokens=config.llm.max_tokens_worker,
+            endpoint=endpoint,
+            config=config,
+            prompt_logger=prompt_logger,
+            usage=usage,
         )
-        llm_time = time.time() - llm_start
-    except Exception as e:
-        if prompt_logger:
-            prompt_logger.log("agent", agent_id, iteration, system_prompt, prompt, "", str(e))
+        llm_time += time.time() - initial_start
+    except Exception as exc:
         return {
             "agent_id": agent_id,
             "direction": direction,
@@ -132,121 +118,73 @@ this approach. Write clean, working Python code.
             "code": "",
             "score": None,
             "success": False,
-            "error": f"LLM error: {str(e)}",
+            "error": f"LLM error: {exc}",
             "notes": "",
             "instance_scores": {},
             "instance_errors": {},
-            "token_usage": None,
-            "llm_time": 0.0,
-            "exec_time": 0.0,
-        }
-
-    # Log the prompt and response
-    if prompt_logger:
-        prompt_logger.log("agent", agent_id, iteration, system_prompt, prompt, response)
-
-    # Parse the response
-    approach, code, notes = _parse_response(response)
-
-    if not code:
-        return {
-            "agent_id": agent_id,
-            "direction": direction,
-            "approach": approach or "Could not parse response",
-            "code": response[:1000],
-            "score": None,
-            "success": False,
-            "error": "No valid Python code block found in response",
-            "notes": notes,
-            "instance_scores": {},
-            "instance_errors": {},
-            "token_usage": token_usage,
+            "token_usage": TokenUsage.from_run_usage(usage),
             "llm_time": llm_time,
             "exec_time": 0.0,
         }
 
-    # Pre-test on smallest instance — if it fails, give LLM one retry with error feedback
-    smallest_name, smallest_problem = problems[0]
-    smallest_jobs = [
-        {"id": j.id, "processing_time": j.processing_time, "due_date": j.due_date}
-        for j in smallest_problem.jobs
-    ]
+    draft = draft_result.output
+    approach = draft.approach
+    code = draft.code
+    notes = draft.notes
 
-    pre_result = execute_agent_code(code, smallest_jobs, config.sandbox)
-    pre_error = None
-    if not pre_result["success"]:
-        pre_error = pre_result["error"]
-    else:
-        eval_check = evaluate_schedule(smallest_problem, pre_result["schedule"])
-        if not eval_check["valid"]:
-            pre_error = eval_check["error"]
+    _, smallest_problem = problems[0]
+    smallest_jobs = [
+        {"id": job.id, "processing_time": job.processing_time, "due_date": job.due_date}
+        for job in smallest_problem.jobs
+    ]
+    pre_error = _validate_generated_code(code, smallest_problem, smallest_jobs, config)
 
     for retry in range(config.swarm.agent_retries):
         if pre_error is None:
-            break  # pre-test passed, no retry needed
+            break
 
-        # Feed the error back to the LLM
         fix_prompt = FIX_PROMPT.format(
             num_jobs=len(smallest_problem.jobs),
             error=pre_error[:1000],
             code=code,
         )
         try:
-            fix_start = time.time()
-            fix_response, fix_tokens = await chat_completion(
+            retry_start = time.time()
+            fix_result = await _request_worker_draft(
+                role=f"agent_fix{retry + 1}",
+                agent_id=agent_id,
+                iteration=iteration,
                 prompt=fix_prompt,
                 system_prompt=system_prompt,
-                config=config.llm,
-                model=config.llm.agent_model,
-                temperature=config.llm.temperature_worker,
-                max_tokens=config.llm.max_tokens_worker,
+                endpoint=endpoint,
+                config=config,
+                prompt_logger=prompt_logger,
+                usage=usage,
             )
-            llm_time += time.time() - fix_start
-            if fix_tokens and token_usage:
-                token_usage.prompt_tokens += fix_tokens.prompt_tokens
-                token_usage.completion_tokens += fix_tokens.completion_tokens
-                token_usage.total_tokens += fix_tokens.total_tokens
-
-            if prompt_logger:
-                prompt_logger.log(f"agent_fix{retry+1}", agent_id, iteration,
-                                  system_prompt, fix_prompt, fix_response)
-
-            fix_approach, fix_code, fix_notes = _parse_response(fix_response)
-            if fix_code:
-                code = fix_code
-                if fix_approach:
-                    approach = fix_approach
-                if fix_notes:
-                    notes = fix_notes + f" (fixed after pre-test retry {retry+1})"
-
-                # Re-test on smallest instance
-                pre_result = execute_agent_code(code, smallest_jobs, config.sandbox)
-                pre_error = None
-                if not pre_result["success"]:
-                    pre_error = pre_result["error"]
-                else:
-                    eval_check = evaluate_schedule(smallest_problem, pre_result["schedule"])
-                    if not eval_check["valid"]:
-                        pre_error = eval_check["error"]
-            else:
-                break  # couldn't parse fixed code, stop retrying
+            llm_time += time.time() - retry_start
         except Exception:
-            break  # LLM call failed, stop retrying
+            break
 
-    # Test on all instances
+        fixed = fix_result.output
+        approach = fixed.approach or approach
+        code = fixed.code or code
+        if fixed.notes:
+            notes = f"{fixed.notes} (fixed after pre-test retry {retry + 1})"
+
+        pre_error = _validate_generated_code(code, smallest_problem, smallest_jobs, config)
+
     exec_start = time.time()
-    instance_scores = {}
-    instance_errors = {}
-    first_error = None
+    instance_scores: dict[str, float] = {}
+    instance_errors: dict[str, str] = {}
+    first_error: str | None = None
 
     for inst_name, problem in problems:
         job_data = [
-            {"id": j.id, "processing_time": j.processing_time, "due_date": j.due_date}
-            for j in problem.jobs
+            {"id": job.id, "processing_time": job.processing_time, "due_date": job.due_date}
+            for job in problem.jobs
         ]
 
         exec_result = execute_agent_code(code, job_data, config.sandbox)
-
         if not exec_result["success"]:
             instance_errors[inst_name] = exec_result["error"]
             if first_error is None:
@@ -255,7 +193,6 @@ this approach. Write clean, working Python code.
 
         schedule = exec_result["schedule"]
         eval_result = evaluate_schedule(problem, schedule)
-
         if not eval_result["valid"]:
             instance_errors[inst_name] = eval_result["error"]
             if first_error is None:
@@ -265,11 +202,9 @@ this approach. Write clean, working Python code.
         instance_scores[inst_name] = eval_result["total_tardiness"]
 
     exec_time = time.time() - exec_start
+    token_usage = TokenUsage.from_run_usage(usage)
 
-    # Determine overall success and aggregate score
-    # Only count as fully successful if ALL instances passed
     all_passed = len(instance_scores) == len(problems) and not instance_errors
-
     if not instance_scores:
         return {
             "agent_id": agent_id,
@@ -294,14 +229,14 @@ this approach. Write clean, working Python code.
     if instance_errors:
         failed_names = sorted(instance_errors.keys())
         reasons = []
-        for fn in failed_names:
-            err = instance_errors[fn]
-            # Extract exception type from traceback
+        for failed_name in failed_names:
+            err = instance_errors[failed_name]
             lines = err.strip().splitlines()
             last = lines[-1] if lines else err[:80]
-            reasons.append(f"{fn}: {last[:80]}")
+            reasons.append(f"{failed_name}: {last[:80]}")
         notes_parts.append(f"Failed: {'; '.join(reasons)}")
-    notes_parts.append(notes)
+    if notes:
+        notes_parts.append(notes)
 
     return {
         "agent_id": agent_id,
@@ -321,28 +256,51 @@ this approach. Write clean, working Python code.
     }
 
 
-def _parse_response(response: str) -> tuple[str, str, str]:
-    """
-    Parse agent LLM response to extract approach, code, and notes.
+async def _request_worker_draft(
+    role: str,
+    agent_id: int,
+    iteration: int,
+    prompt: str,
+    system_prompt: str,
+    endpoint: LLMEndpoint,
+    config: Config,
+    prompt_logger: PromptLogger | None,
+    usage: RunUsage,
+) -> AgentRunResult[WorkerDraft]:
+    worker_agent = build_worker_agent(config, endpoint, system_prompt)
+    result = await worker_agent.run(
+        prompt,
+        usage=usage,
+        model_settings={
+            "temperature": config.llm.temperature_worker,
+            "max_tokens": config.llm.max_tokens_worker,
+        },
+    )
+    if prompt_logger:
+        prompt_logger.log_structured(
+            role=role,
+            agent_id=agent_id,
+            iteration=iteration,
+            system_prompt=system_prompt,
+            user_prompt=prompt,
+            output=result.output,
+            messages_json=result.all_messages_json(),
+        )
+    return result
 
-    Returns (approach, code, notes).
-    """
-    # Extract approach
-    approach = ""
-    approach_match = re.search(r"APPROACH:\s*(.+)", response)
-    if approach_match:
-        approach = approach_match.group(1).strip()
 
-    # Extract code block
-    code = ""
-    code_match = re.search(r"```python\s*\n(.*?)```", response, re.DOTALL)
-    if code_match:
-        code = code_match.group(1).strip()
+def _validate_generated_code(
+    code: str,
+    problem: ProblemInstance,
+    jobs: list[dict],
+    config: Config,
+) -> str | None:
+    """Run the smallest-instance validation used before the full benchmark set."""
+    pre_result = execute_agent_code(code, jobs, config.sandbox)
+    if not pre_result["success"]:
+        return pre_result["error"]
 
-    # Extract notes
-    notes = ""
-    notes_match = re.search(r"NOTES:\s*(.+?)(?:\n\n|$)", response, re.DOTALL)
-    if notes_match:
-        notes = notes_match.group(1).strip()
-
-    return approach, code, notes
+    eval_check = evaluate_schedule(problem, pre_result["schedule"])
+    if not eval_check["valid"]:
+        return eval_check["error"]
+    return None
