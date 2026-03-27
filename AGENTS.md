@@ -10,19 +10,25 @@ This repository is a research codebase for a coordinator-led swarm of LLM agents
 
 ## Dependency Management
 
-- Use `uv add <package>` to add runtime dependencies.
-- Use `uv add --dev <package>` to add development-only tools such as test runners or linters.
-- Treat `pyproject.toml` and `uv.lock` as the dependency source of truth.
+- Prefer `uv add <package>` to add runtime dependencies.
+- Prefer `uv add --dev <package>` to add development-only tools such as test runners or linters.
+- If `uv` is unavailable and you only need a working environment, use an activated `pip` or `conda` environment and install the project with `python -m pip install -e .`.
+- If `uv` is unavailable and you need local developer tooling, install it into the active environment with `python -m pip install ...` such as `python -m pip install pytest`.
+- Treat `pyproject.toml` and `uv.lock` as the dependency source of truth. Fallback `pip` or `conda` workflows should consume those definitions rather than replace them.
 - Do not edit dependency versions in multiple places by hand unless there is a strong reason and the change is explained in the PR or commit.
 
 ## Running Code
 
-- Use `uv run ...` for scripts, entry points, and one-off commands.
+- Prefer `uv run ...` for scripts, entry points, and one-off commands.
 - Preferred examples:
   - `uv run swarmllm --help`
   - `uv run python -m scripts.run --agents 10 --iterations 3`
   - `uv run pytest`
-- When adding new scripts under `scripts/`, make them runnable through `uv run python -m ...` or a declared project entry point.
+- If `uv` is unavailable, run the equivalent commands inside an activated `pip` or `conda` environment:
+  - `swarmllm --help`
+  - `python -m scripts.run --agents 10 --iterations 3`
+  - `pytest`
+- When adding new scripts under `scripts/`, make them runnable through `uv run python -m ...` or a declared project entry point, and directly through `python -m ...` inside an activated `pip` or `conda` environment.
 
 ## Testing Expectations
 
@@ -35,7 +41,7 @@ This repository is a research codebase for a coordinator-led swarm of LLM agents
   - sandbox success and failure paths
   - response parsing in agent and coordinator workflows
 - Avoid requiring a live model server in the default test suite. Mock or isolate Ollama/vLLM-compatible calls when testing orchestration behavior.
-- Run `uv run pytest` before wrapping up substantive changes.
+- Run `uv run pytest` before wrapping up substantive changes, or `pytest` inside an activated `pip` or `conda` environment when `uv` is unavailable.
 
 ## Code Organization Guidelines
 
@@ -49,4 +55,4 @@ This repository is a research codebase for a coordinator-led swarm of LLM agents
 - Read the relevant folder README before adding a new module.
 - Update docs when repository structure or workflow expectations change.
 - Add tests in `tests/` with new features and bug fixes.
-- Use `uv add` and `uv run` consistently so local workflows stay predictable for future collaborators.
+- Prefer `uv add` and `uv run` so local workflows stay predictable for future collaborators, but keep `pip` and `conda` fallback instructions accurate for contributors who do not have a `uv` environment available.

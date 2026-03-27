@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlsplit, urlunsplit
 
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
@@ -60,6 +61,42 @@ def normalize_openai_base_url(url: str) -> str:
     if normalized.endswith("/v1"):
         return normalized
     return f"{normalized}/v1"
+
+
+def is_loopback_base_url(url: str) -> bool:
+    """Return whether a base URL points at a local loopback interface."""
+    hostname = urlsplit(normalize_openai_base_url(url)).hostname
+    return hostname in {"127.0.0.1", "localhost", "::1", "0.0.0.0"}
+
+
+def loopback_base_url_candidates(url: str) -> list[str]:
+    """Return reasonable local aliases for loopback URLs.
+
+    Some local model servers on macOS bind in ways that make `localhost`
+    work while `127.0.0.1` does not, or vice versa. Trying both helps make
+    the example backend profiles more forgiving without changing remote URLs.
+    """
+    normalized = normalize_openai_base_url(url)
+    parts = urlsplit(normalized)
+    hostname = parts.hostname
+    if hostname not in {"127.0.0.1", "localhost", "::1", "0.0.0.0"}:
+        return [normalized]
+
+    candidates = [normalized]
+    alias_map = {
+        "127.0.0.1": ["localhost"],
+        "localhost": ["127.0.0.1"],
+        "::1": ["localhost", "127.0.0.1"],
+        "0.0.0.0": ["127.0.0.1", "localhost"],
+    }
+    for alias in alias_map.get(hostname, []):
+        alias_host = f"[{alias}]" if ":" in alias else alias
+        if parts.port is not None:
+            netloc = f"{alias_host}:{parts.port}"
+        else:
+            netloc = alias_host
+        candidates.append(urlunsplit(parts._replace(netloc=netloc)))
+    return list(dict.fromkeys(candidates))
 
 
 def resolve_api_key(endpoint: LLMEndpoint, backend_kind: BackendKind) -> str:

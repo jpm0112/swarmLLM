@@ -1,21 +1,31 @@
 """
 Interactive setup script that chooses a backend profile and launches the swarm.
 
-This script is backend-aware but intentionally lightweight: local or remote model
-servers must already be running. Runtime validation happens inside `scripts/run.py`
+This script is backend-aware and can bootstrap local backends for common
+single-node workflows. Runtime validation still happens inside `scripts/run.py`
 via `/v1/models` checks before the swarm starts.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import platform
+import signal
 import subprocess
 import sys
+import time
+from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlsplit
+from urllib.request import Request, urlopen
 
 # Ensure project root is on sys.path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from swarmllm.llm.profiles import load_backend_profile, loopback_base_url_candidates, resolve_api_key
 
 
 DEFAULT_PROFILE_BY_BACKEND = {
@@ -23,6 +33,33 @@ DEFAULT_PROFILE_BY_BACKEND = {
     "vllm-metal": os.path.join("configs", "backends", "vllm-metal.local.example.toml"),
     "vllm": os.path.join("configs", "backends", "vllm.single-node.example.toml"),
 }
+
+DEFAULT_VLLM_CONFIG_BY_BACKEND = {
+    "vllm-metal": os.path.join("configs", "vllm", "serve.single-node.example.yaml"),
+    "vllm": os.path.join("configs", "vllm", "serve.single-node.example.yaml"),
+}
+
+DEFAULT_VLLM_EXECUTABLE_BY_BACKEND = {
+    "vllm-metal": os.path.join("~", ".venv-vllm-metal", "bin", "vllm"),
+    "vllm": "vllm",
+}
+
+
+@dataclass
+class LocalServerSpec:
+    executable: str
+    command: list[str]
+    api_key_env: str | None
+    api_key: str
+    base_url: str
+    log_path: str
+
+
+@dataclass
+class LocalServerState:
+    process: subprocess.Popen[str] | None
+    log_path: str | None
+    started: bool
 
 
 def supported_backends_for_platform(system_name: str, machine: str) -> list[str]:
@@ -45,6 +82,44 @@ def ask(prompt: str, default: str, explanation: str = "") -> str:
         print(f"    {explanation}")
     value = input(f"  {prompt} [{default}]: ").strip()
     return value if value else default
+
+
+def ask_yes_no(prompt: str, default: bool = True, explanation: str = "") -> bool:
+    """Ask a yes/no question with a default."""
+    if explanation:
+        print(f"    {explanation}")
+    default_label = "Y/n" if default else "y/N"
+    while True:
+        value = input(f"  {prompt} [{default_label}]: ").strip().lower()
+        if value == "":
+            return default
+        if value in {"y", "yes"}:
+            return True
+        if value in {"n", "no"}:
+            return False
+        print("  Invalid choice, try again.")
+
+
+def pick_option(prompt: str, options: list[str], default: str | None = None) -> str:
+    """Pick a single option from a numbered list."""
+    if not options:
+        raise ValueError("pick_option requires at least one option")
+    default_index = options.index(default) + 1 if default in options else 1
+    print()
+    for idx, option in enumerate(options, start=1):
+        marker = " (default)" if idx == default_index else ""
+        print(f"    {idx}) {option}{marker}")
+    while True:
+        choice = input(f"  {prompt} [{default_index}]: ").strip()
+        if choice == "":
+            return options[default_index - 1]
+        try:
+            index = int(choice)
+            if 1 <= index <= len(options):
+                return options[index - 1]
+        except ValueError:
+            pass
+        print("  Invalid choice, try again.")
 
 
 def pick_backend(options: list[str]) -> str:
@@ -72,13 +147,297 @@ def backend_notes(backend: str) -> str:
         return "Expect a running Ollama server exposing its OpenAI-compatible API."
     if backend == "vllm-metal":
         return (
-            "Expect a running Apple Silicon vLLM Metal server, typically from "
-            "~/.venv-vllm-metal/bin/vllm serve ... using the example YAML template."
+            "Can auto-start an Apple Silicon vLLM Metal server, typically from "
+            "~/.venv-vllm-metal/bin/vllm, using the example single-node settings."
         )
     return (
-        "Expect a running vLLM server. Cluster or cloud profiles should point at "
-        "remote endpoints; this launcher does not provision infrastructure."
+        "Can auto-start a local vLLM server for single-node use. Cluster or cloud "
+        "profiles should still point at remote endpoints."
     )
+
+
+def is_local_base_url(base_url: str) -> bool:
+    """Return whether the base URL points at a loopback or wildcard local address."""
+    hostname = urlsplit(base_url).hostname
+    return hostname in {"127.0.0.1", "localhost", "::1", "0.0.0.0"}
+
+
+def parse_base_url(base_url: str) -> tuple[str, int]:
+    """Extract host and port from an OpenAI-compatible base URL."""
+    parts = urlsplit(base_url)
+    if parts.hostname is None or parts.port is None:
+        raise ValueError(f"Base URL must include host and port: {base_url}")
+    return parts.hostname, parts.port
+
+
+def parse_flat_yaml(path: str) -> dict[str, Any]:
+    """Parse the repo's simple single-level YAML templates into a dict."""
+    parsed: dict[str, Any] = {}
+    with open(path, "r", encoding="utf-8") as f:
+        for raw_line in f:
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if ":" not in line:
+                continue
+            key, value = line.split(":", 1)
+            parsed[key.strip()] = parse_yaml_scalar(value.strip())
+    return parsed
+
+
+def parse_yaml_scalar(value: str) -> Any:
+    """Parse a scalar value from the simple YAML config templates."""
+    if value.startswith(("'", '"')) and value.endswith(("'", '"')) and len(value) >= 2:
+        return value[1:-1]
+    lowered = value.lower()
+    if lowered == "true":
+        return True
+    if lowered == "false":
+        return False
+    try:
+        return int(value)
+    except ValueError:
+        pass
+    try:
+        return float(value)
+    except ValueError:
+        pass
+    return value
+
+
+def fetch_available_models(base_url: str, api_key: str, timeout: float = 3.0) -> list[str]:
+    """Fetch available model ids from an OpenAI-compatible `/v1/models` endpoint."""
+    headers = {"Authorization": f"Bearer {api_key}"}
+    last_error: Exception | None = None
+    for candidate in loopback_base_url_candidates(base_url):
+        request = Request(f"{candidate}/models", headers=headers)
+        try:
+            with urlopen(request, timeout=timeout) as response:
+                payload = json.load(response)
+            return sorted(item["id"] for item in payload.get("data", []) if "id" in item)
+        except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+            last_error = exc
+    if last_error is not None:
+        raise RuntimeError(f"Failed to query {base_url}/models: {last_error}") from last_error
+    return []
+
+
+def choose_ollama_models(base_url: str, api_key: str, default_coordinator: str, default_worker: str) -> tuple[str, str]:
+    """Fetch and choose coordinator/worker models from a running Ollama server."""
+    try:
+        available_models = fetch_available_models(base_url, api_key)
+    except RuntimeError as exc:
+        print()
+        print(f"  Warning: could not read Ollama models automatically: {exc}")
+        coordinator = ask("Coordinator model", default_coordinator)
+        worker = ask("Worker model", default_worker)
+        return coordinator, worker
+
+    if not available_models:
+        print()
+        print("  Warning: Ollama returned no models.")
+        coordinator = ask("Coordinator model", default_coordinator)
+        worker = ask("Worker model", default_worker)
+        return coordinator, worker
+
+    print()
+    print("  Available Ollama models:")
+    coordinator = pick_option("Coordinator model", available_models, default=default_coordinator)
+    worker = pick_option("Worker model", available_models, default=default_worker)
+    return coordinator, worker
+
+
+def prompt_backend_api_key(api_key_env: str | None, default_api_key: str, env: dict[str, str]) -> str:
+    """Prompt for an API key and keep the backend env var in sync."""
+    api_key = ask(
+        "Backend API key",
+        default_api_key,
+        "This must match the API key passed to the local server and the backend profile env var.",
+    )
+    if api_key_env:
+        env[api_key_env] = api_key
+    return api_key
+
+
+def build_vllm_serve_command(executable: str, config_values: dict[str, Any]) -> list[str]:
+    """Build a `vllm serve ...` command from a flat template mapping."""
+    if "model" not in config_values:
+        raise ValueError("vLLM config must define `model`.")
+
+    command = [os.path.expanduser(executable), "serve", str(config_values["model"])]
+    flag_order = [
+        "served-model-name",
+        "host",
+        "port",
+        "api-key",
+        "dtype",
+        "max-model-len",
+        "gpu-memory-utilization",
+        "max-num-seqs",
+        "tensor-parallel-size",
+        "pipeline-parallel-size",
+    ]
+    for key in flag_order:
+        if key in config_values:
+            command.extend([f"--{key}", str(config_values[key])])
+    if config_values.get("enable-prefix-caching"):
+        command.append("--enable-prefix-caching")
+    return command
+
+
+def build_local_vllm_server_spec(
+    backend: str,
+    profile_path: str,
+    output_dir: str,
+    env: dict[str, str],
+) -> LocalServerSpec:
+    """Build the launch command and environment for a local vLLM-style backend."""
+    profile = load_backend_profile(profile_path)
+    endpoint = profile.coordinator_endpoints[0]
+    base_url = endpoint.base_url
+    host, port = parse_base_url(base_url)
+    api_key_env = endpoint.api_key_env
+    default_config_path = DEFAULT_VLLM_CONFIG_BY_BACKEND[backend]
+    config_path = ask(
+        "vLLM config path",
+        default_config_path,
+        "Use a simple YAML template to seed the launch command.",
+    )
+    if not os.path.exists(config_path):
+        raise FileNotFoundError(f"vLLM config not found: {config_path}")
+
+    executable = ask(
+        "vLLM executable",
+        DEFAULT_VLLM_EXECUTABLE_BY_BACKEND[backend],
+        "Path to the `vllm` executable that should launch the local server.",
+    )
+
+    config_values = parse_flat_yaml(config_path)
+    config_values["served-model-name"] = profile.coordinator.model
+    config_values["host"] = host
+    config_values["port"] = port
+
+    api_key_default = env.get(api_key_env, str(config_values.get("api-key", "token-abc123"))) if api_key_env else str(
+        config_values.get("api-key", "token-abc123")
+    )
+    api_key = prompt_backend_api_key(api_key_env, api_key_default, env)
+    config_values["api-key"] = api_key
+
+    command = build_vllm_serve_command(executable, config_values)
+    log_path = os.path.join(output_dir, f"{backend}_server.log")
+    return LocalServerSpec(
+        executable=os.path.expanduser(executable),
+        command=command,
+        api_key_env=api_key_env,
+        api_key=api_key,
+        base_url=base_url,
+        log_path=log_path,
+    )
+
+
+def wait_for_backend_ready(
+    base_url: str,
+    api_key: str,
+    timeout_seconds: float,
+    process: subprocess.Popen[str] | None = None,
+) -> bool:
+    """Poll `/v1/models` until a backend is ready or the process exits."""
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        try:
+            fetch_available_models(base_url, api_key, timeout=2.0)
+            return True
+        except RuntimeError:
+            pass
+        if process is not None and process.poll() is not None:
+            return False
+        time.sleep(1.0)
+    return False
+
+
+def tail_file(path: str, num_lines: int = 20) -> list[str]:
+    """Return the last few lines from a text file."""
+    if not os.path.exists(path):
+        return []
+    with open(path, "r", encoding="utf-8", errors="replace") as f:
+        lines = f.readlines()
+    return [line.rstrip("\n") for line in lines[-num_lines:]]
+
+
+def stop_local_server(process: subprocess.Popen[str]) -> None:
+    """Best-effort shutdown for a local model server process."""
+    if process.poll() is not None:
+        return
+    try:
+        if os.name != "nt":
+            os.killpg(process.pid, signal.SIGTERM)
+        else:
+            process.terminate()
+        process.wait(timeout=10)
+    except (ProcessLookupError, subprocess.TimeoutExpired):
+        if process.poll() is None:
+            if os.name != "nt":
+                os.killpg(process.pid, signal.SIGKILL)
+            else:
+                process.kill()
+
+
+def ensure_local_vllm_server(
+    backend: str,
+    profile_path: str,
+    output_dir: str,
+    env: dict[str, str],
+) -> LocalServerState:
+    """Start a local vLLM-style backend when the profile points at loopback and nothing is listening."""
+    profile = load_backend_profile(profile_path)
+    endpoint = profile.coordinator_endpoints[0]
+    base_url = endpoint.base_url
+
+    if not is_local_base_url(base_url):
+        print("  Remote backend profile detected; launcher will not auto-start a local server.")
+        return LocalServerState(process=None, log_path=None, started=False)
+
+    if endpoint.api_key_env and endpoint.api_key_env not in env:
+        default_api_key = endpoint.api_key or "token-abc123"
+        api_key = prompt_backend_api_key(endpoint.api_key_env, default_api_key, env)
+    else:
+        api_key = resolve_api_key(endpoint, profile.kind)
+
+    try:
+        models = fetch_available_models(base_url, api_key)
+        print(f"  Reusing existing {backend} server at {base_url} ({len(models)} model(s) visible).")
+        return LocalServerState(process=None, log_path=None, started=False)
+    except RuntimeError:
+        pass
+
+    spec = build_local_vllm_server_spec(backend, profile_path, output_dir, env)
+    log_handle = open(spec.log_path, "w", encoding="utf-8")
+    process = subprocess.Popen(
+        spec.command,
+        stdout=log_handle,
+        stderr=subprocess.STDOUT,
+        text=True,
+        env=env,
+        start_new_session=(os.name != "nt"),
+    )
+    log_handle.close()
+
+    print(f"  Starting {backend} server...")
+    print(f"    Command: {' '.join(spec.command)}")
+    print(f"    Log:     {spec.log_path}")
+
+    if not wait_for_backend_ready(spec.base_url, spec.api_key, timeout_seconds=90, process=process):
+        print(f"ERROR: {backend} server did not become ready at {spec.base_url}")
+        tail = tail_file(spec.log_path)
+        if tail:
+            print("  Last log lines:")
+            for line in tail:
+                print(f"    {line}")
+        stop_local_server(process)
+        raise RuntimeError(f"{backend} startup failed")
+
+    print(f"  {backend} server is ready.")
+    return LocalServerState(process=process, log_path=spec.log_path, started=True)
 
 
 def main():
@@ -104,6 +463,18 @@ def main():
     if not os.path.exists(profile_path):
         print(f"ERROR: Backend profile not found: {profile_path}")
         sys.exit(1)
+    profile = load_backend_profile(profile_path)
+
+    coordinator_model = profile.coordinator.model
+    worker_model = profile.worker.model
+    if backend == "ollama":
+        api_key = resolve_api_key(profile.coordinator_endpoints[0], profile.kind)
+        coordinator_model, worker_model = choose_ollama_models(
+            profile.coordinator_endpoints[0].base_url,
+            api_key,
+            coordinator_model,
+            worker_model,
+        )
 
     agents = ask(
         "Number of agents",
@@ -150,6 +521,8 @@ def main():
     print("  Configuration:")
     print(f"    Backend:        {backend}")
     print(f"    Profile:        {profile_path}")
+    print(f"    Coord model:    {coordinator_model}")
+    print(f"    Worker model:   {worker_model}")
     print(f"    Agents:         {agents}")
     print(f"    Iterations:     {iterations}")
     print(f"    Instances:      {instance_sizes}")
@@ -165,11 +538,24 @@ def main():
         print("  Cancelled.")
         return
 
+    run_env = os.environ.copy()
+    server_state = LocalServerState(process=None, log_path=None, started=False)
+    if backend in {"vllm-metal", "vllm"}:
+        try:
+            server_state = ensure_local_vllm_server(backend, profile_path, output_dir, run_env)
+        except (FileNotFoundError, RuntimeError, ValueError) as exc:
+            print(f"ERROR: {exc}")
+            sys.exit(1)
+
     cmd = [
         sys.executable,
         os.path.join(os.path.dirname(__file__), "run.py"),
         "--backend-profile",
         profile_path,
+        "--coordinator-model",
+        coordinator_model,
+        "--agent-model",
+        worker_model,
         "--agents",
         agents,
         "--iterations",
@@ -187,7 +573,13 @@ def main():
         "--output-dir",
         output_dir,
     ]
-    subprocess.run(cmd)
+    try:
+        subprocess.run(cmd, env=run_env)
+    finally:
+        if server_state.process is not None:
+            print()
+            print("  Stopping local model server...")
+            stop_local_server(server_state.process)
 
 
 if __name__ == "__main__":

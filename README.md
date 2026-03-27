@@ -16,16 +16,38 @@ The design in [docs/DESIGN.md](docs/DESIGN.md) centers on three ideas:
 
 ## Quickstart
 
-Install and sync the project environment with `uv`:
+The preferred workflow uses `uv`, but you can fall back to `pip` or `conda` if a `uv` environment is unavailable.
+
+Preferred `uv` setup:
 
 ```bash
 uv sync
+```
+
+Fallback `pip` setup inside an activated Python environment:
+
+```bash
+python -m pip install -U pip
+python -m pip install -e .
+python -m pip install pytest
+```
+
+Fallback `conda` setup:
+
+```bash
+conda create -n swarmllm python=3.11
+conda activate swarmllm
+python -m pip install -U pip
+python -m pip install -e .
+python -m pip install pytest
 ```
 
 Run the test suite:
 
 ```bash
 uv run pytest
+# or, inside an activated pip or conda environment:
+pytest
 ```
 
 Run the swarm from the project entry point:
@@ -33,12 +55,17 @@ Run the swarm from the project entry point:
 ```bash
 uv run swarmllm --help
 uv run swarmllm --backend-profile configs/backends/ollama.local.example.toml --agents 10 --iterations 3
+# or, inside an activated pip or conda environment:
+swarmllm --help
+swarmllm --backend-profile configs/backends/ollama.local.example.toml --agents 10 --iterations 3
 ```
 
 You can also run the script module directly:
 
 ```bash
 uv run python -m scripts.run --backend-profile configs/backends/vllm.single-node.example.toml --agents 10 --iterations 3
+# or, inside an activated pip or conda environment:
+python -m scripts.run --backend-profile configs/backends/vllm.single-node.example.toml --agents 10 --iterations 3
 ```
 
 ## Backends
@@ -95,8 +122,10 @@ swarmLLM/
 
 ## Development Notes
 
-- Use `uv add <package>` for runtime dependencies and `uv add --dev <package>` for developer tooling.
-- Use `uv run ...` for scripts, CLIs, and tests so commands run inside the managed environment.
+- Prefer `uv add <package>` for runtime dependencies and `uv add --dev <package>` for developer tooling.
+- If `uv` is unavailable, install the project into an activated `pip` or `conda` environment with `python -m pip install -e .`, install local dev tools such as `pytest` with `python -m pip install ...`, and run commands directly inside that environment.
+- Prefer `uv run ...` for scripts, CLIs, and tests when `uv` is available; otherwise use the same commands without the `uv run` prefix inside the active `pip` or `conda` environment.
+- Treat `pyproject.toml` and `uv.lock` as the canonical dependency definitions; `pip` and `conda` are compatibility workflows, not separate sources of truth.
 - Add or update tests whenever behavior changes, especially in `swarmllm/problems`, `swarmllm/sandbox`, `swarmllm/tracking`, and parser-heavy logic in `swarmllm/core`.
 - Keep the deterministic core testable without requiring a live Ollama server.
 - Keep backend selection in TOML profiles instead of scattering endpoint details through code.

@@ -12,6 +12,7 @@ This folder is the home for the automated test suite.
 ## Testing Workflow
 
 - Run the full suite with `uv run pytest`.
+- If `uv` is unavailable, run the same suite with `pytest` inside an activated `pip` or `conda` environment.
 - Add tests with every feature or bug fix when practical.
 - Keep default tests independent of a live Ollama server or network access.
 

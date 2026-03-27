@@ -1,16 +1,21 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
+import httpx
 import pytest
 from pydantic_ai import Agent, ModelResponse, ToolCallPart
 from pydantic_ai.models.function import FunctionModel
+from pydantic_ai.models import override_allow_model_requests
 from pydantic_ai.models.test import TestModel
 
-from swarmllm.config import Config, LLMEndpoint
+from swarmllm.config import Config, InstanceProfile, LLMEndpoint
 from swarmllm.core.agent import run_agent
 from swarmllm.core.coordinator import get_next_directions
-from swarmllm.llm.factory import build_coordinator_agent, build_worker_agent
+from swarmllm.core.orchestrator import run_swarm
+from swarmllm.llm.factory import build_coordinator_agent, build_worker_agent, clear_caches
+from swarmllm.llm.health import validate_backend_or_raise
 from swarmllm.llm.schemas import CoordinatorRoundPlan, WorkerDraft
 from swarmllm.problems.scheduling import generate_instance
 
@@ -194,3 +199,119 @@ async def test_get_next_directions_fills_missing_assignments(monkeypatch):
     assert directions[0] == "Try EDD with stochastic tie-breaks"
     assert directions[1] != ""
     assert usage is not None
+
+
+@pytest.mark.anyio
+async def test_run_swarm_smoke_uses_resolved_loopback_endpoint(monkeypatch, tmp_path):
+    config = Config()
+    config.llm.backend_kind = "ollama"
+    config.llm.coordinator_endpoints = [LLMEndpoint(base_url="http://127.0.0.1:11434/v1", api_key="ollama")]
+    config.llm.worker_endpoints = [LLMEndpoint(base_url="http://127.0.0.1:11434/v1", api_key="ollama")]
+    config.swarm.num_agents = 1
+    config.swarm.num_iterations = 1
+    config.swarm.max_concurrent_agents = 1
+    config.swarm.agent_retries = 0
+    config.problem.instances = [
+        InstanceProfile(
+            name="tiny",
+            num_jobs=4,
+            min_processing_time=1,
+            max_processing_time=3,
+            due_date_tightness=0.6,
+        )
+    ]
+
+    seen = {"models": 0, "coordinator": 0, "worker": 0, "chat_hosts": []}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "127.0.0.1":
+            raise httpx.ConnectError("connection refused", request=request)
+
+        if request.url.path == "/v1/models":
+            seen["models"] += 1
+            return httpx.Response(
+                200,
+                json={"data": [{"id": config.llm.coordinator_model}, {"id": config.llm.agent_model}]},
+            )
+
+        if request.url.path == "/v1/chat/completions":
+            seen["chat_hosts"].append(request.url.host)
+            body = json.loads(request.content)
+            system_prompt = body["messages"][0]["content"]
+            if "coordinator of a swarm" in system_prompt:
+                seen["coordinator"] += 1
+                payload = {
+                    "analysis": "Start with a simple FIFO sanity check.",
+                    "directions": [
+                        {"agent_id": 0, "mode": "explore", "direction": "Try FIFO as a sanity check"}
+                    ],
+                }
+            else:
+                seen["worker"] += 1
+                payload = {
+                    "approach": "FIFO sanity check",
+                    "code": "def schedule(jobs):\n    return [job['id'] for job in jobs]",
+                    "notes": "valid smoke-test worker draft",
+                }
+
+            return httpx.Response(
+                200,
+                json={
+                    "id": "chatcmpl-test",
+                    "object": "chat.completion",
+                    "created": 1710000000,
+                    "model": body["model"],
+                    "choices": [
+                        {
+                            "index": 0,
+                            "message": {
+                                "role": "assistant",
+                                "content": None,
+                                "tool_calls": [
+                                    {
+                                        "id": "call_1",
+                                        "type": "function",
+                                        "function": {
+                                            "name": "final_result",
+                                            "arguments": json.dumps(payload),
+                                        },
+                                    }
+                                ],
+                            },
+                            "finish_reason": "tool_calls",
+                        }
+                    ],
+                    "usage": {
+                        "prompt_tokens": 10,
+                        "completion_tokens": 20,
+                        "total_tokens": 30,
+                    },
+                },
+            )
+
+        raise AssertionError(f"Unexpected request path: {request.url.path}")
+
+    transport = httpx.MockTransport(handler)
+    client = httpx.AsyncClient(transport=transport, trust_env=False)
+
+    async def validate_with_mock(llm_config):
+        await validate_backend_or_raise(llm_config, transport=transport)
+
+    clear_caches()
+    monkeypatch.setattr("swarmllm.core.orchestrator.validate_backend_or_raise", validate_with_mock)
+    monkeypatch.setattr("swarmllm.llm.factory._get_http_client", lambda *args, **kwargs: client)
+
+    try:
+        with override_allow_model_requests(True):
+            await run_swarm(config, output_dir=str(tmp_path))
+    finally:
+        clear_caches()
+        await client.aclose()
+
+    assert config.llm.coordinator_endpoints[0].base_url == "http://localhost:11434/v1"
+    assert config.llm.worker_endpoints[0].base_url == "http://localhost:11434/v1"
+    assert seen["models"] == 2
+    assert seen["coordinator"] == 1
+    assert seen["worker"] == 1
+    assert seen["chat_hosts"] == ["localhost", "localhost"]
+    assert (tmp_path / "results_log.md").exists()

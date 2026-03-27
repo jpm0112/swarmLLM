@@ -10,7 +10,7 @@ from pydantic_ai.models.openai import OpenAIChatModel, OpenAIModelProfile
 from pydantic_ai.providers.openai import OpenAIProvider
 
 from swarmllm.config import Config, LLMConfig, LLMEndpoint
-from swarmllm.llm.profiles import normalize_openai_base_url, resolve_api_key
+from swarmllm.llm.profiles import is_loopback_base_url, normalize_openai_base_url, resolve_api_key
 from swarmllm.llm.schemas import CoordinatorRoundPlan, WorkerDraft
 
 
@@ -89,5 +89,8 @@ def _get_chat_model(config: LLMConfig, endpoint: LLMEndpoint, model_name: str) -
 def _get_http_client(base_url: str, api_key: str, timeout_seconds: int) -> httpx.AsyncClient:
     cache_key = (base_url, api_key, timeout_seconds)
     if cache_key not in _HTTP_CLIENT_CACHE:
-        _HTTP_CLIENT_CACHE[cache_key] = httpx.AsyncClient(timeout=httpx.Timeout(timeout_seconds))
+        _HTTP_CLIENT_CACHE[cache_key] = httpx.AsyncClient(
+            timeout=httpx.Timeout(timeout_seconds),
+            trust_env=not is_loopback_base_url(base_url),
+        )
     return _HTTP_CLIENT_CACHE[cache_key]
