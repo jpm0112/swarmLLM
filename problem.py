@@ -32,29 +32,28 @@ class ProblemInstance:
     optimal_lower_bound: float  # rough lower bound for reference
 
     def to_description(self) -> str:
-        """Human-readable description for LLM agents."""
-        lines = [
-            f"# Job Scheduling Problem",
-            f"",
-            f"**Objective:** Minimize total tardiness.",
-            f"**Tardiness** of job j = max(0, completion_time_j - due_date_j)",
-            f"**Total tardiness** = sum of tardiness across all jobs. Lower is better.",
-            f"",
-            f"You must return an ordering (permutation) of job IDs. Jobs are processed",
-            f"sequentially in the order you return. Each job starts immediately after the",
-            f"previous one finishes.",
-            f"",
-            f"## Jobs ({len(self.jobs)} total)",
-            f"",
-            f"| Job ID | Processing Time | Due Date |",
-            f"|--------|----------------|----------|",
-        ]
-        for job in self.jobs:
-            lines.append(f"| {job.id} | {job.processing_time} | {job.due_date} |")
+        """Structure-only problem description for LLM agents (no instance data)."""
+        return """# Job Scheduling Problem
 
-        lines.append(f"")
-        lines.append(f"Total processing time: {self.total_processing_time}")
-        return "\n".join(lines)
+**Objective:** Minimize total tardiness.
+**Tardiness** of job j = max(0, completion_time_j - due_date_j)
+**Total tardiness** = sum of tardiness across all jobs. Lower is better.
+
+You must return an ordering (permutation) of job IDs. Jobs are processed
+sequentially in the order you return. Each job starts immediately after the
+previous one finishes.
+
+## Function Signature
+
+`def schedule(jobs: list[dict]) -> list[int]`
+
+**Input:** `jobs` — a list of dicts, each with:
+- `"id"` (int): unique job identifier (0 to N-1)
+- `"processing_time"` (int): how long the job takes to complete
+- `"due_date"` (int): the deadline for the job
+
+**Output:** a list of all job IDs (ints) in the order they should be processed.
+Every job must appear exactly once (a valid permutation)."""
 
 
 def generate_instance(
