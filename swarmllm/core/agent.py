@@ -138,6 +138,10 @@ Write a general algorithm — do not hardcode for a specific instance.
                 endpoint_label=endpoint_label,
             )
     except Exception as exc:
+        import traceback
+        tb = traceback.format_exc()
+        print(f"    Agent {agent_id} LLM error ({type(exc).__name__}): {exc}")
+        print(f"    {tb.splitlines()[-2] if len(tb.splitlines()) >= 2 else tb}")
         return {
             "agent_id": agent_id,
             "direction": direction,
@@ -145,7 +149,7 @@ Write a general algorithm — do not hardcode for a specific instance.
             "code": "",
             "score": None,
             "success": False,
-            "error": f"LLM error: {exc}",
+            "error": f"LLM error ({type(exc).__name__}): {exc}",
             "notes": "",
             "instance_scores": {},
             "instance_errors": {},

@@ -41,7 +41,7 @@ def build_worker_agent(config: Config, endpoint: LLMEndpoint, system_prompt: str
             output_type=WorkerDraft,
             system_prompt=system_prompt,
             name="swarmllm_worker",
-            retries=1,
+            retries=3,
             defer_model_check=True,
         )
     return cast(Agent[None, WorkerDraft], _AGENT_CACHE[cache_key])
@@ -61,7 +61,7 @@ def build_coordinator_agent(
             output_type=CoordinatorRoundPlan,
             system_prompt=system_prompt,
             name="swarmllm_coordinator",
-            retries=1,
+            retries=3,
             defer_model_check=True,
         )
     return cast(Agent[None, CoordinatorRoundPlan], _AGENT_CACHE[cache_key])
