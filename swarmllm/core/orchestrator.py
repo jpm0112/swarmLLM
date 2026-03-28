@@ -23,15 +23,7 @@ from dataclasses import asdict
 
 from swarmllm.config import Config
 from swarmllm.llm.schemas import DirectionAssignment
-from swarmllm.problems.scheduling import (
-    generate_instance,
-    save_instance,
-    ProblemInstance,
-    evaluate_schedule,
-    baseline_fifo,
-    baseline_edd,
-    baseline_spt,
-)
+from swarmllm.problems import ProblemBase, ProblemInstance, InstanceProfile, load_problem
 from swarmllm.core.agent import run_agent
 from swarmllm.core.coordinator import get_initial_directions, get_next_directions
 from swarmllm.llm.health import validate_backend_or_raise
@@ -93,34 +85,37 @@ async def _run_swarm_impl(config: Config, output_dir: str, telemetry: RunTelemet
     print("  Backend validation passed.")
     print()
 
+    # Load the problem module
+    problem = load_problem(config.problem.problem_type)
+    print(f"  Problem: {problem.name} — {problem.objective}")
+    print()
+
+    # Use configured profiles, or fall back to problem defaults
+    profiles = config.problem.instance_profiles
+    if not profiles:
+        profiles = problem.get_default_profiles()
+        config.problem.instance_profiles = profiles
+
     # 1. Generate problem instances (one per profile)
-    profiles = config.problem.instances
     telemetry.set_stage("problem generation")
     print(f"[1/3] Generating {len(profiles)} problem instances...")
     problems = []
-    instance_names = []  # human-readable names for each instance
+    instance_names = []
     for i, profile in enumerate(profiles):
-        problem = generate_instance(
-            num_jobs=profile.num_jobs,
-            seed=config.problem.seed + i,  # different but reproducible per instance
-            min_pt=profile.min_processing_time,
-            max_pt=profile.max_processing_time,
-            due_date_tightness=profile.due_date_tightness,
+        inst = problem.generate_instance(
+            profile=profile,
+            seed=config.problem.seed + i,
         )
-        problems.append(problem)
+        problems.append(inst)
         instance_names.append(profile.name)
 
     # Save instances to disk
     instances_dir = os.path.join(output_dir, "instances")
     os.makedirs(instances_dir, exist_ok=True)
-    for problem, profile in zip(problems, profiles):
+    for inst, profile in zip(problems, profiles):
         path = os.path.join(instances_dir, f"{profile.name}.json")
-        save_instance(problem, path, profile_name=profile.name, profile_params={
-            "num_jobs": profile.num_jobs,
-            "min_processing_time": profile.min_processing_time,
-            "max_processing_time": profile.max_processing_time,
-            "due_date_tightness": profile.due_date_tightness,
-        })
+        problem.save_instance(inst, path, profile_name=profile.name,
+                              profile_params=profile.params)
     print(f"  Instances saved to: {instances_dir}")
 
     # Compute baselines per instance
@@ -128,24 +123,25 @@ async def _run_swarm_impl(config: Config, output_dir: str, telemetry: RunTelemet
     print()
     print(f"  {'=' * 56}")
     print(f"  PROBLEM INSTANCES & BASELINES")
-    print(f"  Objective: minimize total tardiness (lower is better)")
+    print(f"  Objective: {problem.objective}")
     print(f"  {'=' * 56}")
-    for problem, profile in zip(problems, profiles):
-        baselines = _compute_baselines(problem)
+    baseline_names = None
+    for inst, profile in zip(problems, profiles):
+        baselines = problem.get_baselines(inst)
         all_baselines[profile.name] = baselines
+        if baseline_names is None:
+            baseline_names = list(baselines.keys())
         best_baseline_name = min(baselines, key=baselines.get)
         print(f"\n  {profile.name}")
-        print(f"    {profile.num_jobs} jobs | tightness={profile.due_date_tightness} "
-              f"| processing time={profile.min_processing_time}-{profile.max_processing_time} "
-              f"| total PT={problem.total_processing_time}")
-        for name, score in baselines.items():
-            marker = " <-- best" if name == best_baseline_name else ""
-            print(f"    {name:>4}: {score:>10,} tardiness{marker}")
+        print(f"    {problem.format_instance_info(inst, profile)}")
+        for bl_name, score in baselines.items():
+            marker = " <-- best" if bl_name == best_baseline_name else ""
+            print(f"    {bl_name:>4}: {score:>10,}{marker}")
 
     # Aggregate baseline scores (sum across all instances, per strategy)
     agg_baselines = {}
-    for name in ["FIFO", "EDD", "SPT"]:
-        agg_baselines[name] = sum(all_baselines[n][name] for n in instance_names)
+    for bl_name in baseline_names:
+        agg_baselines[bl_name] = sum(all_baselines[n][bl_name] for n in instance_names)
 
     best_agg_name = min(agg_baselines, key=agg_baselines.get)
     telemetry.set_baseline(min(agg_baselines.values()))
@@ -156,9 +152,9 @@ async def _run_swarm_impl(config: Config, output_dir: str, telemetry: RunTelemet
     )
     print(f"\n  {'—' * 56}")
     print(f"  AGGREGATE (sum across all instances) — target to beat:")
-    for name, score in agg_baselines.items():
-        marker = " <-- best" if name == best_agg_name else ""
-        print(f"    {name:>4}: {score:>10,} tardiness{marker}")
+    for bl_name, score in agg_baselines.items():
+        marker = " <-- best" if bl_name == best_agg_name else ""
+        print(f"    {bl_name:>4}: {score:>10,}{marker}")
     print(f"  {'=' * 56}")
     print()
 
@@ -170,7 +166,8 @@ async def _run_swarm_impl(config: Config, output_dir: str, telemetry: RunTelemet
     # Save config for this run
     config_path = os.path.join(output_dir, "config.json")
     with open(config_path, "w", encoding="utf-8") as f:
-        json.dump(asdict(config), f, indent=2)
+        config_dict = asdict(config)
+        json.dump(config_dict, f, indent=2)
 
     # Record baselines in log
     log.append_coordinator_summary(
@@ -182,10 +179,8 @@ async def _run_swarm_impl(config: Config, output_dir: str, telemetry: RunTelemet
     best_score = min(agg_baselines.values())
     best_approach = "baseline"
     telemetry.set_best_score(best_score)
-    best_instance_scores = {}  # per-instance scores for best solution
-    # Track top solutions (score, approach, code) for exploit agents
+    best_instance_scores = {}
     top_solutions = []
-    # Track per-iteration stats for summary
     iteration_stats = []
 
     for iteration in range(1, config.swarm.num_iterations + 1):
@@ -211,6 +206,7 @@ async def _run_swarm_impl(config: Config, output_dir: str, telemetry: RunTelemet
                 config=config,
                 endpoint=coord_endpoint,
                 prompt_logger=prompt_logger,
+                problem=problem,
             )
             coord_duration = time.time() - coord_start
             if coord_tokens:
@@ -256,6 +252,7 @@ async def _run_swarm_impl(config: Config, output_dir: str, telemetry: RunTelemet
                 endpoint=coord_endpoint,
                 prompt_logger=prompt_logger,
                 best_solution=best_solution,
+                problem=problem,
             )
             coord_duration = time.time() - coord_start
             if coord_tokens:
@@ -297,13 +294,14 @@ async def _run_swarm_impl(config: Config, output_dir: str, telemetry: RunTelemet
         print(f"  Testing on {len(profiles)} instances: {', '.join(instance_names)}")
         start_time = time.time()
 
-        # Build (name, problem) tuples for agents
+        # Build (name, problem_instance) tuples for agents
         named_problems = list(zip(instance_names, problems))
 
         results = await _run_agents_parallel(
             assignments=assignments,
             problems=named_problems,
             config=config,
+            problem=problem,
             router=router,
             iteration=iteration,
             prompt_logger=prompt_logger,
@@ -352,7 +350,6 @@ async def _run_swarm_impl(config: Config, output_dir: str, telemetry: RunTelemet
                     "code": result["code"],
                     "instance_scores": result.get("instance_scores", {}),
                 })
-                # Keep only top 5, sorted by aggregate score
                 top_solutions.sort(key=lambda x: x["score"])
                 top_solutions = top_solutions[:5]
 
@@ -367,7 +364,6 @@ async def _run_swarm_impl(config: Config, output_dir: str, telemetry: RunTelemet
                             parts.append(f"{n}={result['instance_scores'][n]}")
                         elif n in result.get("instance_errors", {}):
                             reason = _categorize_failure(result["instance_errors"][n])
-                            # Short version for console — take first phrase before " —"
                             short = reason.split(" —")[0]
                             parts.append(f"{n}=FAIL({short})")
                         else:
@@ -444,6 +440,7 @@ async def _run_agents_parallel(
     assignments: list[DirectionAssignment],
     problems: list[tuple[str, ProblemInstance]],
     config: Config,
+    problem: ProblemBase,
     router: EndpointRouter,
     iteration: int = 0,
     prompt_logger: PromptLogger | None = None,
@@ -491,6 +488,7 @@ async def _run_agents_parallel(
             agent_start = time.time()
             result = await run_agent(
                 agent_id, assignment.direction, problems, config,
+                problem=problem,
                 endpoint=endpoint,
                 iteration=iteration, prompt_logger=prompt_logger,
                 top_solutions=top_solutions,
@@ -579,9 +577,8 @@ def _categorize_failure(error: str) -> str:
     """Categorize a failure error string into an actionable reason for the coordinator."""
     if "timed out" in error.lower():
         return "execution timed out — code took too long, needs a faster algorithm or early termination"
-    elif "not allowed" in error:
-        # Extract which module was blocked
-        module = _extract_between(error, "Import of '", "'")
+    elif "not allowed" in error or "is blocked" in error:
+        module = _extract_between(error, "Import of '", "'") or _extract_between(error, "Import '", "'")
         if module:
             return f"blocked import '{module}' — agent tried to use a forbidden module"
         return "blocked import — agent tried to use a forbidden module"
@@ -632,7 +629,6 @@ def _categorize_failure(error: str) -> str:
         detail = ", ".join(parts) if parts else "not a valid permutation of all job IDs"
         return f"invalid schedule — {detail}"
     else:
-        # Extract the actual exception type from the traceback
         exc_type = _extract_exception_type(error)
         if exc_type:
             detail = _extract_last_line_with(error, exc_type + ":")
@@ -663,21 +659,10 @@ def _extract_last_line_with(text: str, marker: str) -> str:
 def _extract_exception_type(error: str) -> str:
     """Extract the Python exception type name from a traceback string."""
     import re
-    # Match common pattern: "ExceptionType: message" at start of a line
     match = re.search(r"^(\w*Error|\w*Exception|\w*Warning):", error, re.MULTILINE)
     if match:
         return match.group(1)
     return ""
-
-
-def _compute_baselines(problem: ProblemInstance) -> dict[str, float]:
-    """Compute baseline scores for reference."""
-    results = {}
-    for name, fn in [("FIFO", baseline_fifo), ("EDD", baseline_edd), ("SPT", baseline_spt)]:
-        schedule = fn(problem)
-        eval_result = evaluate_schedule(problem, schedule)
-        results[name] = eval_result["total_tardiness"]
-    return results
 
 
 def _format_baselines(all_baselines: dict[str, dict], agg_baselines: dict[str, float]) -> str:
@@ -702,7 +687,6 @@ def _print_iteration_summary(results: list[dict], instance_names: list[str]):
         scores.sort()
         print(f"  Aggregate scores: min={scores[0]}, median={scores[len(scores)//2]}, "
               f"max={scores[-1]} ({len(scores)} successful)")
-        # Per-instance breakdown
         for name in instance_names:
             inst_scores = [
                 r["instance_scores"][name]
@@ -744,6 +728,7 @@ def _print_final_summary(log, all_baselines, agg_baselines, best_score, best_app
     out(f"    Iterations:        {config.swarm.num_iterations}")
     out(f"    Explore ratio:     {config.swarm.explore_ratio}")
     out(f"    Code timeout:      {config.sandbox.timeout}s")
+    out(f"    Problem:           {config.problem.problem_type}")
     out(f"    Seed:              {config.problem.seed}")
 
     # Baselines
@@ -798,7 +783,6 @@ def _print_final_summary(log, all_baselines, agg_baselines, best_score, best_app
         total_failed += s["failed"]
         total_wall += s["wall_time"]
 
-    # Collect all per-agent times across iterations
     all_llm_times = []
     all_exec_times = []
     for s in iteration_stats:
@@ -807,7 +791,6 @@ def _print_final_summary(log, all_baselines, agg_baselines, best_score, best_app
     total_llm_time = sum(all_llm_times)
     total_exec_time = sum(all_exec_times)
 
-    # Overall agent stats
     total_agents = total_successful + total_failed
     success_rate = (total_successful / total_agents * 100) if total_agents > 0 else 0
     out()

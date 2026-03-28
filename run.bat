@@ -9,7 +9,7 @@ cd /d "%~dp0"
 :: Create venv if it doesn't exist
 if not exist ".venv" (
     echo Creating virtual environment...
-    python -m venv .venv
+    py -3.10 -m venv .venv
     if errorlevel 1 (
         echo ERROR: Failed to create virtual environment.
         pause

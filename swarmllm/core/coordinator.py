@@ -13,13 +13,13 @@ from pydantic_ai.usage import RunUsage
 from swarmllm.config import Config, LLMEndpoint
 from swarmllm.llm.factory import build_coordinator_agent
 from swarmllm.llm.schemas import CoordinatorRoundPlan, DirectionAssignment
+from swarmllm.problems import ProblemBase
 from swarmllm.tracking.prompt_logger import PromptLogger
 from swarmllm.tracking.token_tracker import TokenUsage
 
 
-COORDINATOR_SYSTEM_PROMPT = """\
-You are the coordinator of a swarm of optimization agents working on a job
-scheduling problem where lower total tardiness is better.
+COORDINATOR_SYSTEM_PROMPT_TEMPLATE = """\
+You are the coordinator of a swarm of optimization agents working on {problem_description}.
 
 Return structured output with:
 - analysis: a short summary of what is working, failing, or still unexplored
@@ -38,6 +38,7 @@ async def get_initial_directions(
     config: Config,
     endpoint: LLMEndpoint,
     prompt_logger: PromptLogger | None = None,
+    problem: ProblemBase | None = None,
 ) -> tuple[list[DirectionAssignment], TokenUsage | None]:
     """Ask the coordinator for initial directions for iteration 1."""
     num_agents = config.swarm.num_agents
@@ -50,11 +51,13 @@ the search space.
 Each direction should be concrete and actionable, with broad diversity across
 algorithmic families.
 """
+    system_prompt = _build_system_prompt(problem)
     usage = RunUsage()
     result = await _request_coordinator_plan(
         role="coordinator_initial",
         iteration=1,
         prompt=prompt,
+        system_prompt=system_prompt,
         config=config,
         endpoint=endpoint,
         prompt_logger=prompt_logger,
@@ -71,6 +74,7 @@ async def get_next_directions(
     endpoint: LLMEndpoint,
     prompt_logger: PromptLogger | None = None,
     best_solution: dict | None = None,
+    problem: ProblemBase | None = None,
 ) -> tuple[str, list[DirectionAssignment], TokenUsage | None]:
     """
     Ask the coordinator to analyze the last iteration and assign new directions.
@@ -106,11 +110,13 @@ Requirements:
   are meaningfully reframed
 - Pay attention to behavior across different instance sizes, not just one score
 """
+    system_prompt = _build_system_prompt(problem)
     usage = RunUsage()
     result = await _request_coordinator_plan(
         role="coordinator",
         iteration=iteration,
         prompt=prompt,
+        system_prompt=system_prompt,
         config=config,
         endpoint=endpoint,
         prompt_logger=prompt_logger,
@@ -125,12 +131,13 @@ async def _request_coordinator_plan(
     role: str,
     iteration: int,
     prompt: str,
+    system_prompt: str,
     config: Config,
     endpoint: LLMEndpoint,
     prompt_logger: PromptLogger | None,
     usage: RunUsage,
 ) -> AgentRunResult[CoordinatorRoundPlan]:
-    coordinator_agent = build_coordinator_agent(config, endpoint, COORDINATOR_SYSTEM_PROMPT)
+    coordinator_agent = build_coordinator_agent(config, endpoint, system_prompt)
     result = await coordinator_agent.run(
         prompt,
         usage=usage,
@@ -144,12 +151,21 @@ async def _request_coordinator_plan(
             role=role,
             agent_id=None,
             iteration=iteration,
-            system_prompt=COORDINATOR_SYSTEM_PROMPT,
+            system_prompt=system_prompt,
             user_prompt=prompt,
             output=result.output,
             messages_json=result.all_messages_json(),
         )
     return result
+
+
+def _build_system_prompt(problem: ProblemBase | None) -> str:
+    """Build the coordinator system prompt using the problem description."""
+    if problem is not None:
+        desc = problem.get_coordinator_problem_description()
+    else:
+        desc = "an optimization problem (lower score is better)"
+    return COORDINATOR_SYSTEM_PROMPT_TEMPLATE.format(problem_description=desc)
 
 
 def _normalize_round_plan(

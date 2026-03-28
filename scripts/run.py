@@ -2,8 +2,10 @@
 SwarmLLM Entry Point
 
 Usage:
-    python -m scripts.run --backend-profile configs/backends/ollama.local.example.toml
-    python -m scripts.run --backend-profile configs/backends/vllm.single-node.example.toml --agents 10
+    python -m scripts.run --problem job_scheduling
+    python -m scripts.run --problem job_scheduling --backend-profile configs/backends/ollama.local.example.toml
+    python -m scripts.run --problem job_scheduling --agents 10 --iterations 3
+    python -m scripts.run --problem job_scheduling --instance-sizes 20,50,100
 """
 
 from __future__ import annotations
@@ -16,13 +18,16 @@ import sys
 # Ensure project root is on sys.path so `swarmllm` package is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from swarmllm.config import Config, InstanceProfile, LLMEndpoint
+from swarmllm.config import Config, LLMEndpoint
+from swarmllm.problems import load_problem
 from swarmllm.core.orchestrator import run_swarm
 from swarmllm.llm.profiles import apply_backend_profile
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="SwarmLLM — Multi-Agent Optimization")
+    parser.add_argument("--problem", type=str, default=None,
+                        help="Problem type (default: job_scheduling). Available: job_scheduling, job_shop_scheduling")
     parser.add_argument(
         "--backend-profile",
         type=str,
@@ -62,6 +67,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 def build_config_from_args(args: argparse.Namespace) -> Config:
     config = Config()
+
+    # Set problem type
+    if args.problem is not None:
+        config.problem.problem_type = args.problem
+
+    # Apply backend profile
     if args.backend_profile is not None:
         apply_backend_profile(config, args.backend_profile)
 
@@ -78,22 +89,11 @@ def build_config_from_args(args: argparse.Namespace) -> Config:
     if args.max_concurrent is not None:
         config.swarm.max_concurrent_agents = args.max_concurrent
     if args.instance_sizes is not None:
-        sizes = [int(s.strip()) for s in args.instance_sizes.split(",")]
-        tightness_values = [0.4, 0.6, 0.8, 0.5, 0.7]
-        pt_ranges = [(1, 15), (1, 20), (5, 30), (1, 25), (3, 20)]
-        config.problem.instances = []
-        for i, size in enumerate(sizes):
-            tightness = tightness_values[i % len(tightness_values)]
-            min_pt, max_pt = pt_ranges[i % len(pt_ranges)]
-            config.problem.instances.append(
-                InstanceProfile(
-                    name=f"{size}jobs_t{tightness}",
-                    num_jobs=size,
-                    min_processing_time=min_pt,
-                    max_processing_time=max_pt,
-                    due_date_tightness=tightness,
-                )
-            )
+        # Use the problem module to parse instance sizes into profiles
+        problem = load_problem(config.problem.problem_type)
+        config.problem.instance_profiles = problem.get_instance_profiles(
+            args.instance_sizes, config.problem.seed
+        )
     if args.seed is not None:
         config.problem.seed = args.seed
     if args.timeout is not None:
@@ -112,25 +112,29 @@ def main():
 
     os.makedirs(args.output_dir, exist_ok=True)
 
+    # Load problem for display
+    problem = load_problem(config.problem.problem_type)
+    profiles = config.problem.instance_profiles
+    if not profiles:
+        profiles = problem.get_default_profiles()
+
     print("Config:")
-    print(f"  Backend kind: {config.llm.backend_kind}")
-    print(f"  Backend profile: {config.llm.backend_profile_path or '(default config)'}")
+    print(f"  Problem:           {config.problem.problem_type}")
+    print(f"  Backend kind:      {config.llm.backend_kind}")
+    print(f"  Backend profile:   {config.llm.backend_profile_path or '(default config)'}")
     print(f"  Coordinator model: {config.llm.coordinator_model}")
-    print(f"  Agent model: {config.llm.agent_model}")
+    print(f"  Agent model:       {config.llm.agent_model}")
     print(f"  Coordinator endpoints: {[endpoint.base_url for endpoint in config.llm.coordinator_endpoints]}")
-    print(f"  Worker endpoints: {[endpoint.base_url for endpoint in config.llm.worker_endpoints]}")
-    print(f"  Agents: {config.swarm.num_agents}")
-    print(f"  Iterations: {config.swarm.num_iterations}")
-    print(f"  Explore ratio: {config.swarm.explore_ratio}")
-    print(f"  Max concurrent: {config.swarm.max_concurrent_agents}")
-    print(f"  Agent retries: {config.swarm.agent_retries}")
-    print(f"  Instances: {len(config.problem.instances)}")
-    for inst in config.problem.instances:
-        print(
-            f"    {inst.name}: {inst.num_jobs} jobs, tightness={inst.due_date_tightness}, "
-            f"pt={inst.min_processing_time}-{inst.max_processing_time}"
-        )
-    print(f"  Seed: {config.problem.seed}")
+    print(f"  Worker endpoints:  {[endpoint.base_url for endpoint in config.llm.worker_endpoints]}")
+    print(f"  Agents:            {config.swarm.num_agents}")
+    print(f"  Iterations:        {config.swarm.num_iterations}")
+    print(f"  Explore ratio:     {config.swarm.explore_ratio}")
+    print(f"  Max concurrent:    {config.swarm.max_concurrent_agents}")
+    print(f"  Agent retries:     {config.swarm.agent_retries}")
+    print(f"  Instances:         {len(profiles)}")
+    for prof in profiles:
+        print(f"    {prof.name}: {prof.params}")
+    print(f"  Seed:              {config.problem.seed}")
     print()
 
     asyncio.run(run_swarm(config, args.output_dir, dashboard_mode=args.dashboard))

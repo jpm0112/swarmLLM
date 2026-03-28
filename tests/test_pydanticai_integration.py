@@ -12,14 +12,37 @@ from pydantic_ai.models.function import FunctionModel
 from pydantic_ai.models import override_allow_model_requests
 from pydantic_ai.models.test import TestModel
 
-from swarmllm.config import Config, InstanceProfile, LLMEndpoint
+from swarmllm.config import Config, LLMEndpoint
+from swarmllm.problems import InstanceProfile, load_problem
 from swarmllm.core.agent import run_agent
 from swarmllm.core.coordinator import get_next_directions
 from swarmllm.core.orchestrator import run_swarm
 from swarmllm.llm.factory import build_coordinator_agent, build_worker_agent, clear_caches
 from swarmllm.llm.health import validate_backend_or_raise
 from swarmllm.llm.schemas import CoordinatorRoundPlan, WorkerDraft
-from swarmllm.problems.scheduling import generate_instance
+
+
+# Helper: generate a job scheduling problem instance using the ProblemBase interface
+def _make_problems(specs):
+    """Generate problem instances for testing.
+
+    specs: list of (name, num_jobs, seed) tuples.
+    Returns list of (name, ProblemInstance) tuples.
+    """
+    problem = load_problem("job_scheduling")
+    results = []
+    for name, num_jobs, seed in specs:
+        profile = InstanceProfile(
+            name=name,
+            params={"num_jobs": num_jobs, "min_processing_time": 1, "max_processing_time": 3,
+                    "due_date_tightness": 0.6},
+        )
+        inst = problem.generate_instance(profile, seed=seed)
+        results.append((name, inst))
+    return results
+
+
+_job_problem = load_problem("job_scheduling")
 
 
 def test_worker_agent_supports_typed_output_with_test_model():
@@ -120,10 +143,7 @@ async def test_run_agent_retries_after_pretest_failure(monkeypatch):
     config = Config()
     config.swarm.agent_retries = 1
     endpoint = LLMEndpoint(base_url="http://worker/v1", api_key="test")
-    problems = [
-        ("small", generate_instance(num_jobs=4, seed=1, min_pt=1, max_pt=3)),
-        ("medium", generate_instance(num_jobs=5, seed=2, min_pt=1, max_pt=4)),
-    ]
+    problems = _make_problems([("small", 4, 1), ("medium", 5, 2)])
     calls = {"count": 0}
 
     def function_model(messages: list[Any], info: Any) -> ModelResponse:
@@ -159,6 +179,7 @@ async def test_run_agent_retries_after_pretest_failure(monkeypatch):
         direction="Try FIFO as a sanity check",
         problems=problems,
         config=config,
+        problem=_job_problem,
         endpoint=endpoint,
         iteration=1,
         prompt_logger=None,
@@ -176,7 +197,7 @@ async def test_run_agent_fails_cleanly_for_malformed_code(monkeypatch):
     config = Config()
     config.swarm.agent_retries = 0
     endpoint = LLMEndpoint(base_url="http://worker/v1", api_key="test")
-    problems = [("small", generate_instance(num_jobs=4, seed=3, min_pt=1, max_pt=3))]
+    problems = _make_problems([("small", 4, 3)])
 
     def function_model(messages: list[Any], info: Any) -> ModelResponse:
         del messages, info
@@ -202,6 +223,7 @@ async def test_run_agent_fails_cleanly_for_malformed_code(monkeypatch):
         direction="Produce malformed code",
         problems=problems,
         config=config,
+        problem=_job_problem,
         endpoint=endpoint,
         iteration=1,
         prompt_logger=None,
@@ -265,13 +287,15 @@ async def test_run_swarm_smoke_uses_resolved_loopback_endpoint(monkeypatch, tmp_
     config.swarm.num_iterations = 1
     config.swarm.max_concurrent_agents = 1
     config.swarm.agent_retries = 0
-    config.problem.instances = [
+    config.problem.instance_profiles = [
         InstanceProfile(
             name="tiny",
-            num_jobs=4,
-            min_processing_time=1,
-            max_processing_time=3,
-            due_date_tightness=0.6,
+            params={
+                "num_jobs": 4,
+                "min_processing_time": 1,
+                "max_processing_time": 3,
+                "due_date_tightness": 0.6,
+            },
         )
     ]
 

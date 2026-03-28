@@ -2,6 +2,7 @@ from __future__ import annotations
 
 """PydanticAI model and agent factory helpers."""
 
+import json
 from typing import Any, cast
 
 import httpx
@@ -89,8 +90,54 @@ def _get_chat_model(config: LLMConfig, endpoint: LLMEndpoint, model_name: str) -
 def _get_http_client(base_url: str, api_key: str, timeout_seconds: int) -> httpx.AsyncClient:
     cache_key = (base_url, api_key, timeout_seconds)
     if cache_key not in _HTTP_CLIENT_CACHE:
+        transport: httpx.AsyncBaseTransport | None = None
+        if is_loopback_base_url(base_url):
+            # Ollama rejects messages with null content — wrap the transport
+            # to patch those to empty strings before the request is sent.
+            transport = _OllamaFixTransport(
+                httpx.AsyncHTTPTransport(trust_env=False)
+            )
         _HTTP_CLIENT_CACHE[cache_key] = httpx.AsyncClient(
             timeout=httpx.Timeout(timeout_seconds),
             trust_env=not is_loopback_base_url(base_url),
+            transport=transport,
         )
     return _HTTP_CLIENT_CACHE[cache_key]
+
+
+class _OllamaFixTransport(httpx.AsyncBaseTransport):
+    """Wraps an httpx transport to fix null ``content`` fields in chat messages.
+
+    Ollama's OpenAI-compatible ``/v1/chat/completions`` endpoint returns
+    HTTP 400 when any message in the ``messages`` array has ``content: null``.
+    PydanticAI legitimately sends ``null`` content on assistant messages that
+    only carry tool calls, which is valid per the OpenAI spec but not
+    accepted by Ollama.  This transport rewrites those to ``""`` on the fly.
+    """
+
+    def __init__(self, wrapped: httpx.AsyncBaseTransport) -> None:
+        self._wrapped = wrapped
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/chat/completions") and request.content:
+            try:
+                body = json.loads(request.content)
+                patched = False
+                for msg in body.get("messages", []):
+                    if msg.get("content") is None:
+                        msg["content"] = ""
+                        patched = True
+                if patched:
+                    new_content = json.dumps(body).encode("utf-8")
+                    request = httpx.Request(
+                        method=request.method,
+                        url=request.url,
+                        headers=request.headers,
+                        content=new_content,
+                    )
+            except (json.JSONDecodeError, KeyError, TypeError):
+                pass
+        return await self._wrapped.handle_async_request(request)
+
+    async def aclose(self) -> None:
+        await self._wrapped.aclose()

@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import platform
+import re
 import signal
 import subprocess
 import sys
@@ -232,8 +233,90 @@ def fetch_available_models(base_url: str, api_key: str, timeout: float = 3.0) ->
     return []
 
 
-def choose_ollama_models(base_url: str, api_key: str, default_coordinator: str, default_worker: str) -> tuple[str, str]:
-    """Fetch and choose coordinator/worker models from a running Ollama server."""
+def fetch_ollama_model_sizes() -> dict[str, float]:
+    """Run ``ollama list`` and parse model sizes in GB.
+
+    Returns a mapping from model name to size in GB.
+    """
+    sizes: dict[str, float] = {}
+    try:
+        result = subprocess.run(["ollama", "list"], capture_output=True, text=True, timeout=10)
+        if result.returncode != 0:
+            return sizes
+        for line in result.stdout.strip().split("\n")[1:]:  # skip header
+            parts = line.split()
+            if not parts:
+                continue
+            name = parts[0]
+            for i, p in enumerate(parts):
+                if p in ("GB", "MB"):
+                    try:
+                        size_gb = float(parts[i - 1])
+                        if p == "MB":
+                            size_gb /= 1024
+                        sizes[name] = size_gb
+                    except (ValueError, IndexError):
+                        pass
+                    break
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        pass
+    return sizes
+
+
+def estimate_parallel(model_size_gb: float, vram_gb: float = 24) -> int:
+    """Estimate max parallel requests based on model size and VRAM.
+
+    Model VRAM usage is roughly 1.2x the file size (weights + overhead).
+    Each parallel slot needs ~2-3GB for KV cache at 4K context.
+    Conservative estimate to avoid OOM / Ollama timeouts.
+    """
+    model_vram = model_size_gb * 1.2  # actual VRAM when loaded
+    free = vram_gb - model_vram - 2  # 2GB system overhead
+    per_slot = 2.5  # ~2.5GB KV cache per parallel slot
+    slots = max(1, int(free / per_slot))
+    return min(slots, 8)  # cap at 8
+
+
+def pick_model_with_sizes(
+    models: list[str],
+    sizes: dict[str, float],
+    label: str,
+    preferred: str = "",
+) -> str:
+    """Show numbered menu with sizes and let user pick a model."""
+    default_idx = 1
+    for i, m in enumerate(models, 1):
+        if m == preferred:
+            default_idx = i
+            break
+
+    print(f"\n  {label}:")
+    print("  ----------------------------------------")
+    for i, m in enumerate(models, 1):
+        size_str = f" ({sizes[m]:.1f} GB)" if m in sizes else ""
+        marker = " *" if i == default_idx else ""
+        print(f"    {i}) {m}{size_str}{marker}")
+    print("  ----------------------------------------")
+    while True:
+        choice = input(f"  Pick a number [{default_idx}]: ").strip()
+        if choice == "":
+            return models[default_idx - 1]
+        try:
+            idx = int(choice)
+            if 1 <= idx <= len(models):
+                return models[idx - 1]
+        except ValueError:
+            pass
+        print("  Invalid choice, try again.")
+
+
+def choose_ollama_models(base_url: str, api_key: str, default_coordinator: str, default_worker: str) -> tuple[str, str, dict[str, float]]:
+    """Fetch and choose coordinator/worker models from a running Ollama server.
+
+    Returns (coordinator_model, worker_model, model_sizes_dict).
+    """
+    sizes = fetch_ollama_model_sizes()
+
     try:
         available_models = fetch_available_models(base_url, api_key)
     except RuntimeError as exc:
@@ -241,20 +324,56 @@ def choose_ollama_models(base_url: str, api_key: str, default_coordinator: str, 
         print(f"  Warning: could not read Ollama models automatically: {exc}")
         coordinator = ask("Coordinator model", default_coordinator)
         worker = ask("Worker model", default_worker)
-        return coordinator, worker
+        return coordinator, worker, sizes
 
     if not available_models:
         print()
         print("  Warning: Ollama returned no models.")
         coordinator = ask("Coordinator model", default_coordinator)
         worker = ask("Worker model", default_worker)
-        return coordinator, worker
+        return coordinator, worker, sizes
 
-    print()
-    print("  Available Ollama models:")
-    coordinator = pick_option("Coordinator model", available_models, default=default_coordinator)
-    worker = pick_option("Worker model", available_models, default=default_worker)
-    return coordinator, worker
+    if sizes:
+        print()
+        print("  The COORDINATOR reads all results and assigns research")
+        print("  directions. Bigger model = smarter strategy.")
+        coordinator = pick_model_with_sizes(available_models, sizes, "Coordinator model", default_coordinator)
+        print(f"  -> {coordinator}")
+
+        print()
+        print("  The AGENT model writes optimization code. Runs N times")
+        print("  per iteration, so speed matters. Can be smaller/faster.")
+        worker = pick_model_with_sizes(available_models, sizes, "Agent model", default_worker)
+        print(f"  -> {worker}")
+    else:
+        print()
+        print("  Available Ollama models:")
+        coordinator = pick_option("Coordinator model", available_models, default=default_coordinator)
+        worker = pick_option("Worker model", available_models, default=default_worker)
+
+    return coordinator, worker, sizes
+
+
+def pick_problem() -> str:
+    """Let user pick a problem type."""
+    available = ["job_scheduling", "job_shop_scheduling"]
+    print("\n  Problem type:")
+    print("  ----------------------------------------")
+    for i, p in enumerate(available, 1):
+        marker = " *" if i == 1 else ""
+        print(f"    {i}) {p}{marker}")
+    print("  ----------------------------------------")
+    while True:
+        choice = input("  Pick a number [1]: ").strip()
+        if choice == "":
+            return available[0]
+        try:
+            idx = int(choice)
+            if 1 <= idx <= len(available):
+                return available[idx - 1]
+        except ValueError:
+            pass
+        print("  Invalid choice, try again.")
 
 
 def prompt_backend_api_key(api_key_env: str | None, default_api_key: str, env: dict[str, str]) -> str:
@@ -537,31 +656,61 @@ def main():
         sys.exit(1)
     profile = load_backend_profile(profile_path)
 
+    # Pick problem type
+    problem_type = pick_problem()
+    print(f"  -> {problem_type}")
+
     coordinator_model = profile.coordinator.model
     worker_model = profile.worker.model
+    model_sizes: dict[str, float] = {}
+    recommended_parallel = 4  # sensible default
+
     if backend == "ollama":
         api_key = resolve_api_key(profile.coordinator_endpoints[0], profile.kind)
-        coordinator_model, worker_model = choose_ollama_models(
+        coordinator_model, worker_model, model_sizes = choose_ollama_models(
             profile.coordinator_endpoints[0].base_url,
             api_key,
             coordinator_model,
             worker_model,
         )
 
+        # GPU VRAM estimation for parallel slots
+        if model_sizes and worker_model in model_sizes:
+            agent_size = model_sizes[worker_model]
+            GPU_0_VRAM = 24  # RTX 3090 — TODO: detect automatically
+            parallel_gpu0 = estimate_parallel(agent_size, GPU_0_VRAM)
+            recommended_parallel = parallel_gpu0
+            print(f"\n  Agent model ~{agent_size:.1f} GB")
+            print(f"    Estimated ~{parallel_gpu0} parallel slots (assuming {GPU_0_VRAM} GB VRAM)")
+
+    concurrent = ask(
+        "Max concurrent agents",
+        str(recommended_parallel),
+        "How many agents run at the same time. Based on model size and GPU VRAM.",
+    )
+    concurrent_int = int(concurrent)
+
     agents = ask(
         "Number of agents",
-        "20",
-        "How many worker agents to run per iteration.",
+        str(concurrent_int),
+        f"How many worker agents per iteration.",
     )
     iterations = ask(
         "Number of iterations",
-        "5",
+        "2",
         "How many coordinator/worker rounds to run.",
     )
+    if problem_type == "job_shop_scheduling":
+        instance_default = "easy,medium,hard"
+        instance_help = ("JSPLIB instances to test on. Use difficulty levels (easy,medium,hard,very_hard) "
+                         "or specific instance names (ft06,ft10,abz7). E.g. easy,medium,hard")
+    else:
+        instance_default = "20,50,100"
+        instance_help = "Problem sizes to test on. Each gets different characteristics. E.g. 20,50,100"
     instance_sizes = ask(
         "Instance sizes (comma-separated)",
-        "20,50,100",
-        "Problem sizes to test on. Example: 20,50,100",
+        instance_default,
+        instance_help,
     )
     explore_ratio = ask(
         "Explore ratio (0.0-1.0)",
@@ -585,18 +734,27 @@ def main():
     )
 
     timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-    output_dir = os.path.join("runs", f"{timestamp}_{backend}_{agents}agents_{iterations}iter")
+    safe_coord = re.sub(r'[^a-zA-Z0-9._-]', '_', coordinator_model)
+    safe_agent = re.sub(r'[^a-zA-Z0-9._-]', '_', worker_model)
+    output_dir = os.path.join(
+        "runs",
+        f"{timestamp}_{problem_type}_coord-{safe_coord}_agent-{safe_agent}_{agents}agents_{iterations}iter",
+    )
     os.makedirs(output_dir, exist_ok=True)
 
     print()
     print("=" * 60)
     print("  Configuration:")
+    print(f"    Problem type:   {problem_type}")
     print(f"    Backend:        {backend}")
     print(f"    Profile:        {profile_path}")
     print(f"    Coord model:    {coordinator_model}")
     print(f"    Worker model:   {worker_model}")
+    if model_sizes and worker_model in model_sizes:
+        print(f"    Worker size:    {model_sizes[worker_model]:.1f} GB")
     print(f"    Agents:         {agents}")
     print(f"    Iterations:     {iterations}")
+    print(f"    Concurrent:     {concurrent}")
     print(f"    Instances:      {instance_sizes}")
     print(f"    Explore ratio:  {explore_ratio}")
     print(f"    Timeout:        {timeout}s")
@@ -634,6 +792,8 @@ def main():
     cmd = [
         sys.executable,
         os.path.join(os.path.dirname(__file__), "run.py"),
+        "--problem",
+        problem_type,
         "--backend-profile",
         profile_path,
         "--coordinator-model",
@@ -644,6 +804,8 @@ def main():
         agents,
         "--iterations",
         iterations,
+        "--max-concurrent",
+        concurrent,
         "--instance-sizes",
         instance_sizes,
         "--explore-ratio",

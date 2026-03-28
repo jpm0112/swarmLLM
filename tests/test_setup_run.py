@@ -28,10 +28,14 @@ def test_choose_ollama_models_from_available_list(monkeypatch):
         "scripts.setup_run.fetch_available_models",
         lambda *args, **kwargs: ["llama3.2:3b", "qwen2.5-coder:14b"],
     )
+    monkeypatch.setattr(
+        "scripts.setup_run.fetch_ollama_model_sizes",
+        lambda: {"qwen2.5-coder:14b": 9.0},
+    )
     answers = iter(["2", "1"])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
 
-    coordinator, worker = choose_ollama_models(
+    coordinator, worker, sizes = choose_ollama_models(
         "http://127.0.0.1:11434/v1",
         "ollama",
         "llama3.2:3b",
@@ -40,6 +44,7 @@ def test_choose_ollama_models_from_available_list(monkeypatch):
 
     assert coordinator == "qwen2.5-coder:14b"
     assert worker == "llama3.2:3b"
+    assert sizes.get("qwen2.5-coder:14b") == 9.0
 
 
 def test_parse_flat_yaml_and_build_vllm_command(tmp_path):

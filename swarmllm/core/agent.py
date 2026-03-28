@@ -16,51 +16,11 @@ from pydantic_ai.usage import RunUsage
 from swarmllm.config import Config, LLMEndpoint
 from swarmllm.llm.factory import build_worker_agent
 from swarmllm.llm.schemas import WorkerDraft
-from swarmllm.problems.scheduling import ProblemInstance, evaluate_schedule
+from swarmllm.problems import ProblemBase, ProblemInstance
 from swarmllm.sandbox.executor import execute_agent_code
 from swarmllm.tracking.prompt_logger import PromptLogger
 from swarmllm.tracking.telemetry import TelemetrySink
 from swarmllm.tracking.token_tracker import TokenUsage, UsageSnapshot
-
-
-FIX_PROMPT = """\
-Your previous draft failed when tested on the smallest instance ({num_jobs} jobs).
-
-Full error traceback:
-{error}
-
-Previous code:
-```python
-{code}
-```
-
-Revise the implementation so it returns a valid permutation of all job IDs,
-with no duplicates or omissions, while preserving the assigned research direction.
-"""
-
-
-AGENT_SYSTEM_PROMPT = """\
-You are an optimization coder working on a job scheduling problem.
-You will be given a problem description and a research direction to explore.
-Your job is to write a Python function that produces a good schedule.
-
-Rules:
-1. You must define a function: def schedule(jobs: list[dict]) -> list[int]
-2. Each job dict has keys: "id", "processing_time", "due_date"
-3. Return a list of job IDs representing the full schedule order
-4. The goal is to minimize total tardiness (lower is better)
-5. You may import pip packages already available in the sandbox: {pip_packages}
-6. Dangerous system/network modules are blocked
-7. Your code has a {timeout}s time limit
-
-Return structured output with:
-- approach: a short one-line description of the algorithm
-- code: the complete Python source defining schedule(jobs)
-- notes: brief rationale, caveats, or what you changed on a retry
-
-Return only the structured result. Do not emit XML tags, <tools> wrappers,
-markdown fences, or any prose outside the final structured output.
-"""
 
 
 async def run_agent(
@@ -68,6 +28,7 @@ async def run_agent(
     direction: str,
     problems: list[tuple[str, ProblemInstance]],
     config: Config,
+    problem: ProblemBase,
     endpoint: LLMEndpoint,
     iteration: int = 0,
     prompt_logger: PromptLogger | None = None,
@@ -84,12 +45,16 @@ async def run_agent(
     del top_solutions  # Reserved for future exploit-agent prompt tuning.
 
     _, example_problem = problems[0]
-    instance_desc = ", ".join(f"{name} ({len(problem.jobs)} jobs)" for name, problem in problems)
-    prompt = f"""{example_problem.to_description()}
+    instance_desc = ", ".join(
+        f"{name} ({len(problem.prepare_input(p))} items)" for name, p in problems
+    )
+    problem_desc = problem.get_agent_user_prompt(example_problem, instance_desc)
+
+    prompt = f"""{problem_desc}
 
 Your code will be tested on {len(problems)} diverse instances: {instance_desc}.
-They vary in size, deadline tightness, and processing time ranges.
-Write a general algorithm and do not hardcode for a specific instance.
+They vary in size and characteristics.
+Write a general algorithm — do not hardcode for a specific instance.
 
 ## Research Direction
 
@@ -97,7 +62,9 @@ Write a general algorithm and do not hardcode for a specific instance.
 """
 
     pip_list = ", ".join(config.sandbox.pip_packages) if config.sandbox.pip_packages else "none"
-    system_prompt = AGENT_SYSTEM_PROMPT.format(timeout=config.sandbox.timeout, pip_packages=pip_list)
+    system_prompt = problem.get_agent_system_prompt(
+        timeout=config.sandbox.timeout, pip_packages=pip_list
+    )
     usage = RunUsage()
     llm_time = 0.0
     endpoint_label = endpoint.label or endpoint.base_url
@@ -166,11 +133,11 @@ Write a general algorithm and do not hardcode for a specific instance.
     code = draft.code
     notes = draft.notes
 
+    # Pre-test on smallest instance
     _, smallest_problem = problems[0]
-    smallest_jobs = [
-        {"id": job.id, "processing_time": job.processing_time, "due_date": job.due_date}
-        for job in smallest_problem.jobs
-    ]
+    smallest_input = problem.prepare_input(smallest_problem)
+    function_name = problem.get_function_name()
+
     if telemetry:
         telemetry.set_agent_phase(
             agent_id,
@@ -191,7 +158,9 @@ Write a general algorithm and do not hardcode for a specific instance.
     pre_error = _validate_generated_code(
         code,
         smallest_problem,
-        smallest_jobs,
+        smallest_input,
+        problem,
+        function_name,
         config,
         telemetry=telemetry,
         agent_id=agent_id,
@@ -222,11 +191,7 @@ Write a general algorithm and do not hardcode for a specific instance.
                 endpoint_label=endpoint_label,
                 direction=direction,
             )
-        fix_prompt = FIX_PROMPT.format(
-            num_jobs=len(smallest_problem.jobs),
-            error=pre_error,
-            code=code,
-        )
+        fix_prompt = problem.get_fix_prompt(error=pre_error, code=code)
         try:
             retry_start = time.time()
             fix_result, call_usage = await _request_worker_draft(
@@ -274,7 +239,9 @@ Write a general algorithm and do not hardcode for a specific instance.
         pre_error = _validate_generated_code(
             code,
             smallest_problem,
-            smallest_jobs,
+            smallest_input,
+            problem,
+            function_name,
             config,
             telemetry=telemetry,
             agent_id=agent_id,
@@ -282,6 +249,7 @@ Write a general algorithm and do not hardcode for a specific instance.
             process_label=f"agent {agent_id} precheck",
         )
 
+    # Full evaluation across all instances
     exec_start = time.time()
     instance_scores: dict[str, float] = {}
     instance_errors: dict[str, str] = {}
@@ -304,16 +272,14 @@ Write a general algorithm and do not hardcode for a specific instance.
             iteration=iteration,
             stage="benchmark",
         )
-    for inst_name, problem in problems:
-        job_data = [
-            {"id": job.id, "processing_time": job.processing_time, "due_date": job.due_date}
-            for job in problem.jobs
-        ]
+    for inst_name, inst in problems:
+        input_data = problem.prepare_input(inst)
 
         exec_result = execute_agent_code(
             code,
-            job_data,
+            input_data,
             config.sandbox,
+            function_name=function_name,
             telemetry=telemetry,
             process_label=f"agent {agent_id} {inst_name}",
             process_metadata={"agent_id": agent_id, "iteration": iteration, "instance": inst_name},
@@ -324,15 +290,15 @@ Write a general algorithm and do not hardcode for a specific instance.
                 first_error = exec_result["error"]
             continue
 
-        schedule = exec_result["schedule"]
-        eval_result = evaluate_schedule(problem, schedule)
+        solution = problem.extract_solution(exec_result)
+        eval_result = problem.evaluate(inst, solution)
         if not eval_result["valid"]:
             instance_errors[inst_name] = eval_result["error"]
             if first_error is None:
                 first_error = eval_result["error"]
             continue
 
-        instance_scores[inst_name] = eval_result["total_tardiness"]
+        instance_scores[inst_name] = eval_result["score"]
 
     exec_time = time.time() - exec_start
     token_usage = TokenUsage.from_run_usage(usage)
@@ -426,8 +392,10 @@ async def _request_worker_draft(
 
 def _validate_generated_code(
     code: str,
-    problem: ProblemInstance,
-    jobs: list[dict],
+    instance: ProblemInstance,
+    input_data: list[dict],
+    problem: ProblemBase,
+    function_name: str,
     config: Config,
     telemetry: TelemetrySink | None = None,
     agent_id: int | None = None,
@@ -437,8 +405,9 @@ def _validate_generated_code(
     """Run the smallest-instance validation used before the full benchmark set."""
     pre_result = execute_agent_code(
         code,
-        jobs,
+        input_data,
         config.sandbox,
+        function_name=function_name,
         telemetry=telemetry,
         process_label=process_label or f"agent {agent_id} precheck",
         process_metadata={"agent_id": agent_id, "iteration": iteration, "stage": "precheck"},
@@ -446,7 +415,8 @@ def _validate_generated_code(
     if not pre_result["success"]:
         return pre_result["error"]
 
-    eval_check = evaluate_schedule(problem, pre_result["schedule"])
+    solution = problem.extract_solution(pre_result)
+    eval_check = problem.evaluate(instance, solution)
     if not eval_check["valid"]:
         return eval_check["error"]
     return None

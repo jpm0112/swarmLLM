@@ -11,53 +11,38 @@ You are an optimization coder working on a job scheduling problem.
 You will be given a problem description and a research direction to explore.
 Your job is to write a Python function that produces a good schedule.
 
-RULES:
-1. You MUST define a function: def schedule(jobs: list[dict]) -> list[int]
+Rules:
+1. You must define a function: def schedule(jobs: list[dict]) -> list[int]
 2. Each job dict has keys: "id", "processing_time", "due_date"
-3. Return a list of job IDs (a permutation of all job IDs) — the order jobs should be processed
-4. The goal is to MINIMIZE total tardiness (lower is better)
-5. Prefer standard library and already-installed packages when possible. You may import any pip package (it will be auto-installed). Already installed: {pip_packages}. Blocked: os, sys, subprocess, socket, and other system/network modules.
-6. Your code has a {timeout}s time limit.
-7. Be creative and try novel approaches based on your assigned direction
+3. Return a list of job IDs representing the full schedule order
+4. The goal is to minimize total tardiness (lower is better)
+5. You may import pip packages already available in the sandbox: {pip_packages}
+6. Dangerous system/network modules are blocked
+7. Your code has a {timeout}s time limit
 
-Output your response in this exact format:
+Return structured output with:
+- approach: a short one-line description of the algorithm
+- code: the complete Python source defining schedule(jobs)
+- notes: brief rationale, caveats, or what you changed on a retry
 
-APPROACH: <one-line description of your approach>
-
-```python
-<your complete code here, must define schedule(jobs) function>
-```
-
-NOTES: <brief notes on why this might work or any caveats>
+Return only the structured result. Do not emit XML tags, <tools> wrappers,
+markdown fences, or any prose outside the final structured output.
 """
 
 
 FIX_PROMPT = """\
-Your code failed when tested.
+Your previous draft failed when tested.
 
-## Error:
-```
+Full error traceback:
 {error}
-```
 
-## Your original code:
+Previous code:
 ```python
 {code}
 ```
 
-Fix the code so it works correctly. The function must return a valid permutation
-of ALL job IDs — every job exactly once, no duplicates, no missing.
-Your code will be tested on multiple instances of different sizes.
-
-Output your fixed code in this exact format:
-
-APPROACH: <one-line description of your approach>
-
-```python
-<your fixed code here>
-```
-
-NOTES: <what you fixed>
+Revise the implementation so it returns a valid permutation of all job IDs,
+with no duplicates or omissions, while preserving the assigned research direction.
 """
 
 
