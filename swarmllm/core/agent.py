@@ -9,11 +9,11 @@ proposes a solution approach, writes code, and tests it.
 
 import re
 import time
-from config import Config
-from problems import ProblemBase, ProblemInstance
-from sandbox import execute_agent_code
-from llm_client import chat_completion
-from prompt_logger import PromptLogger
+from swarmllm.config import Config
+from swarmllm.problems import ProblemBase, ProblemInstance
+from swarmllm.sandbox.executor import execute_agent_code
+from swarmllm.llm.client import chat_completion
+from swarmllm.tracking.prompt_logger import PromptLogger
 
 
 async def run_agent(

@@ -19,13 +19,13 @@ import os
 import time
 from dataclasses import asdict
 
-from config import Config
-from problems import ProblemBase, ProblemInstance, InstanceProfile, load_problem
-from agent import run_agent
-from coordinator import get_initial_directions, get_next_directions
-from logger import SharedLog
-from prompt_logger import PromptLogger
-from token_tracker import TokenTracker
+from swarmllm.config import Config
+from swarmllm.problems import ProblemBase, ProblemInstance, InstanceProfile, load_problem
+from swarmllm.core.agent import run_agent
+from swarmllm.core.coordinator import get_initial_directions, get_next_directions
+from swarmllm.tracking.shared_log import SharedLog
+from swarmllm.tracking.prompt_logger import PromptLogger
+from swarmllm.tracking.token_tracker import TokenTracker
 
 
 async def run_swarm(config: Config, output_dir: str = "."):

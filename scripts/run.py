@@ -2,10 +2,10 @@
 SwarmLLM Entry Point
 
 Usage:
-    python run.py
-    python run.py --agents 10 --iterations 3
-    python run.py --problem job_scheduling --instance-sizes 20,50,100
-    python run.py --coordinator-model qwen2.5-coder:14b --agent-model qwen2.5:3b
+    python -m scripts.run
+    python -m scripts.run --agents 10 --iterations 3
+    python -m scripts.run --problem job_scheduling --instance-sizes 20,50,100
+    python -m scripts.run --coordinator-model qwen2.5-coder:14b --agent-model qwen2.5:3b
 """
 
 import argparse
@@ -13,8 +13,11 @@ import asyncio
 import os
 import sys
 
-from config import Config
-from orchestrator import run_swarm
+# Ensure project root is on sys.path so `swarmllm` package is importable
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from swarmllm.config import Config, InstanceProfile
+from swarmllm.core.orchestrator import run_swarm
 
 
 def main():
@@ -44,7 +47,7 @@ def main():
         config.problem.problem_type = args.problem
 
     # Load the problem module for profile parsing
-    from problems import load_problem
+    from swarmllm.problems import load_problem
     problem = load_problem(config.problem.problem_type)
 
     # Apply overrides

@@ -20,7 +20,7 @@ import os
 import random
 from typing import Any
 
-from problems import ProblemBase, ProblemInstance, InstanceProfile
+from swarmllm.problems import ProblemBase, ProblemInstance, InstanceProfile
 from .prompts import (
     AGENT_SYSTEM_PROMPT,
     FIX_PROMPT,

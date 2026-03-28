@@ -27,7 +27,7 @@ pip install -r requirements.txt --quiet
 echo.
 
 :: Run interactive setup + launch
-python setup_run.py
+python scripts\setup_run.py
 
 echo.
 pause

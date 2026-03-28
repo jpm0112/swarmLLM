@@ -10,7 +10,7 @@ The coordinator reads this log to decide on next directions.
 import os
 from datetime import datetime
 
-from config import LogConfig
+from swarmllm.config import LogConfig
 
 
 class SharedLog:

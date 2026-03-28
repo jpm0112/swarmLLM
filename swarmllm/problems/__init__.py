@@ -4,7 +4,7 @@ from __future__ import annotations
 Problem Base Classes
 
 Abstract interface that all optimization problems must implement.
-Each problem lives in its own sub-package (e.g. problems/job_scheduling/).
+Each problem lives in its own sub-package (e.g. swarmllm/problems/job_scheduling/).
 """
 
 from abc import ABC, abstractmethod
@@ -140,10 +140,10 @@ class ProblemBase(ABC):
 def load_problem(problem_type: str) -> ProblemBase:
     """Load a problem class by type name."""
     if problem_type == "job_scheduling":
-        from problems.job_scheduling import JobSchedulingProblem
+        from swarmllm.problems.job_scheduling import JobSchedulingProblem
         return JobSchedulingProblem()
     elif problem_type == "job_shop_scheduling":
-        from problems.job_shop_scheduling import JobShopSchedulingProblem
+        from swarmllm.problems.job_shop_scheduling import JobShopSchedulingProblem
         return JobShopSchedulingProblem()
     else:
         raise ValueError(f"Unknown problem type: {problem_type}. Available: job_scheduling, job_shop_scheduling")
