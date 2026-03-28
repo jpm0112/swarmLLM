@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import textwrap
 from typing import Any
@@ -15,11 +16,32 @@ from pydantic_ai.models.test import TestModel
 from swarmllm.config import Config, InstanceProfile, LLMEndpoint
 from swarmllm.core.agent import run_agent
 from swarmllm.core.coordinator import get_next_directions
-from swarmllm.core.orchestrator import run_swarm
+from swarmllm.core.orchestrator import _run_agents_parallel, run_swarm
 from swarmllm.llm.factory import build_coordinator_agent, build_worker_agent, clear_caches
+from swarmllm.llm.routing import EndpointRouter
 from swarmllm.llm.health import validate_backend_or_raise
-from swarmllm.llm.schemas import CoordinatorRoundPlan, WorkerDraft
+from swarmllm.llm.schemas import CoordinatorRoundPlan, DirectionAssignment, WorkerDraft
 from swarmllm.problems.scheduling import generate_instance
+
+
+def _make_valid_worker_agent() -> Agent:
+    def function_model(messages: list[Any], info: Any) -> ModelResponse:
+        del messages, info
+        return ModelResponse(
+            parts=[
+                ToolCallPart(
+                    tool_name="final_result",
+                    args={
+                        "approach": "FIFO sanity check",
+                        "code": "def schedule(jobs):\n    return [job['id'] for job in jobs]",
+                        "notes": "valid test worker draft",
+                    },
+                    tool_call_id="worker-valid",
+                )
+            ]
+        )
+
+    return Agent(FunctionModel(function_model), output_type=WorkerDraft)
 
 
 def test_worker_agent_supports_typed_output_with_test_model():
@@ -210,6 +232,165 @@ async def test_run_agent_fails_cleanly_for_malformed_code(monkeypatch):
     assert result["success"] is False
     assert "SyntaxError" in result["error"]
     assert result["token_usage"] is not None
+
+
+@pytest.mark.anyio
+async def test_run_agent_reports_partial_benchmark_failures(monkeypatch):
+    config = Config()
+    config.swarm.agent_retries = 0
+    endpoint = LLMEndpoint(base_url="http://worker/v1", api_key="test")
+    problems = [
+        ("small", generate_instance(num_jobs=4, seed=4, min_pt=1, max_pt=3)),
+        ("medium", generate_instance(num_jobs=5, seed=5, min_pt=1, max_pt=4)),
+    ]
+
+    monkeypatch.setattr("swarmllm.core.agent.build_worker_agent", lambda *args, **kwargs: _make_valid_worker_agent())
+
+    async def fake_execute(code, job_data, config, telemetry=None, process_label=None, process_metadata=None):
+        del code, config, telemetry, process_label
+        schedule = [job["id"] for job in job_data]
+        if process_metadata and process_metadata.get("stage") == "precheck":
+            return {"success": True, "schedule": schedule, "error": None, "stdout": ""}
+        if process_metadata and process_metadata.get("instance") == "small":
+            return {"success": True, "schedule": schedule, "error": None, "stdout": ""}
+        return {
+            "success": False,
+            "schedule": None,
+            "error": "RuntimeError: medium benchmark failed",
+            "stdout": "",
+        }
+
+    monkeypatch.setattr("swarmllm.core.agent.execute_agent_code_async", fake_execute)
+
+    result = await run_agent(
+        agent_id=2,
+        direction="Try FIFO and report failures cleanly",
+        problems=problems,
+        config=config,
+        endpoint=endpoint,
+        iteration=1,
+        prompt_logger=None,
+    )
+
+    assert result["success"] is False
+    assert result["score"] is None
+    assert result["error"] == "RuntimeError: medium benchmark failed"
+    assert result["failure_reason"] == "passed 1/2 instances"
+    assert list(result["instance_scores"]) == ["small"]
+    assert result["instance_errors"] == {"medium": "RuntimeError: medium benchmark failed"}
+
+
+@pytest.mark.anyio
+async def test_run_agent_allows_parallel_sandbox_execution(monkeypatch):
+    config = Config()
+    config.swarm.agent_retries = 0
+    endpoint = LLMEndpoint(base_url="http://worker/v1", api_key="test")
+    problems = [("tiny", generate_instance(num_jobs=4, seed=6, min_pt=1, max_pt=3))]
+    entered_agents: list[int] = []
+    both_entered = asyncio.Event()
+    release = asyncio.Event()
+
+    monkeypatch.setattr("swarmllm.core.agent.build_worker_agent", lambda *args, **kwargs: _make_valid_worker_agent())
+
+    async def fake_execute(code, job_data, config, telemetry=None, process_label=None, process_metadata=None):
+        del code, config, telemetry, process_label
+        schedule = [job["id"] for job in job_data]
+        if process_metadata and process_metadata.get("stage") == "precheck":
+            entered_agents.append(process_metadata["agent_id"])
+            if len(set(entered_agents)) == 2:
+                both_entered.set()
+            await release.wait()
+        return {"success": True, "schedule": schedule, "error": None, "stdout": ""}
+
+    monkeypatch.setattr("swarmllm.core.agent.execute_agent_code_async", fake_execute)
+
+    task_a = asyncio.create_task(
+        run_agent(
+            agent_id=0,
+            direction="Agent 0 test direction",
+            problems=problems,
+            config=config,
+            endpoint=endpoint,
+            iteration=1,
+            prompt_logger=None,
+        )
+    )
+    task_b = asyncio.create_task(
+        run_agent(
+            agent_id=1,
+            direction="Agent 1 test direction",
+            problems=problems,
+            config=config,
+            endpoint=endpoint,
+            iteration=1,
+            prompt_logger=None,
+        )
+    )
+
+    await asyncio.wait_for(both_entered.wait(), timeout=1.0)
+    assert set(entered_agents) == {0, 1}
+
+    release.set()
+    results = await asyncio.gather(task_a, task_b)
+
+    assert all(result["success"] for result in results)
+
+
+@pytest.mark.anyio
+async def test_run_agents_parallel_respects_agent_semaphore_during_sandbox_execution(monkeypatch):
+    config = Config()
+    config.swarm.max_concurrent_agents = 1
+    config.swarm.agent_retries = 0
+    config.llm.worker_endpoints = [LLMEndpoint(base_url="http://worker/v1", api_key="test", label="worker-a")]
+    router = EndpointRouter(config.llm)
+    problems = [("tiny", generate_instance(num_jobs=4, seed=7, min_pt=1, max_pt=3))]
+    assignments = [
+        DirectionAssignment(agent_id=0, mode="explore", direction="First direction"),
+        DirectionAssignment(agent_id=1, mode="explore", direction="Second direction"),
+    ]
+    first_entered = asyncio.Event()
+    second_entered = asyncio.Event()
+    release = asyncio.Event()
+    first_agent_id: dict[str, int | None] = {"value": None}
+
+    monkeypatch.setattr("swarmllm.core.agent.build_worker_agent", lambda *args, **kwargs: _make_valid_worker_agent())
+
+    async def fake_execute(code, job_data, config, telemetry=None, process_label=None, process_metadata=None):
+        del code, config, telemetry, process_label
+        schedule = [job["id"] for job in job_data]
+        if process_metadata and process_metadata.get("stage") == "precheck":
+            agent_id = process_metadata["agent_id"]
+            if first_agent_id["value"] is None:
+                first_agent_id["value"] = agent_id
+                first_entered.set()
+                await release.wait()
+            else:
+                second_entered.set()
+        return {"success": True, "schedule": schedule, "error": None, "stdout": ""}
+
+    monkeypatch.setattr("swarmllm.core.agent.execute_agent_code_async", fake_execute)
+
+    task = asyncio.create_task(
+        _run_agents_parallel(
+            assignments=assignments,
+            problems=problems,
+            config=config,
+            router=router,
+            iteration=1,
+            prompt_logger=None,
+            telemetry=None,
+        )
+    )
+
+    await asyncio.wait_for(first_entered.wait(), timeout=1.0)
+    await asyncio.sleep(0.05)
+    assert second_entered.is_set() is False
+
+    release.set()
+    results = await asyncio.wait_for(task, timeout=1.0)
+
+    assert second_entered.is_set() is True
+    assert all(result["success"] for result in results)
 
 
 @pytest.mark.anyio

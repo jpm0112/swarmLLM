@@ -14,6 +14,7 @@ import sys
 import json
 import tempfile
 import os
+import asyncio
 
 from swarmllm.config import SandboxConfig
 from swarmllm.tracking.telemetry import TelemetrySink
@@ -131,6 +132,26 @@ def execute_agent_code(
             os.rmdir(tmp_dir)
         except OSError:
             pass
+
+
+async def execute_agent_code_async(
+    code: str,
+    job_data: list[dict],
+    config: SandboxConfig,
+    telemetry: TelemetrySink | None = None,
+    process_label: str | None = None,
+    process_metadata: dict | None = None,
+) -> dict:
+    """Run sandbox execution without blocking the event loop."""
+    return await asyncio.to_thread(
+        execute_agent_code,
+        code,
+        job_data,
+        config,
+        telemetry,
+        process_label,
+        process_metadata,
+    )
 
 
 def _extract_missing_module(stderr: str) -> str | None:

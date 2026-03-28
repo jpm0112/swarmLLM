@@ -17,7 +17,7 @@ from swarmllm.config import Config, LLMEndpoint
 from swarmllm.llm.factory import build_worker_agent
 from swarmllm.llm.schemas import WorkerDraft
 from swarmllm.problems.scheduling import ProblemInstance, evaluate_schedule
-from swarmllm.sandbox.executor import execute_agent_code
+from swarmllm.sandbox.executor import execute_agent_code_async
 from swarmllm.tracking.prompt_logger import PromptLogger
 from swarmllm.tracking.telemetry import TelemetrySink
 from swarmllm.tracking.token_tracker import TokenUsage, UsageSnapshot
@@ -188,7 +188,7 @@ Write a general algorithm and do not hardcode for a specific instance.
             iteration=iteration,
             stage="precheck",
         )
-    pre_error = _validate_generated_code(
+    pre_error = await _validate_generated_code(
         code,
         smallest_problem,
         smallest_jobs,
@@ -271,7 +271,7 @@ Write a general algorithm and do not hardcode for a specific instance.
                 endpoint_label=endpoint_label,
                 direction=direction,
             )
-        pre_error = _validate_generated_code(
+        pre_error = await _validate_generated_code(
             code,
             smallest_problem,
             smallest_jobs,
@@ -310,7 +310,7 @@ Write a general algorithm and do not hardcode for a specific instance.
             for job in problem.jobs
         ]
 
-        exec_result = execute_agent_code(
+        exec_result = await execute_agent_code_async(
             code,
             job_data,
             config.sandbox,
@@ -424,7 +424,7 @@ async def _request_worker_draft(
     return result, TokenUsage.from_usage_delta(usage_before, usage_after)
 
 
-def _validate_generated_code(
+async def _validate_generated_code(
     code: str,
     problem: ProblemInstance,
     jobs: list[dict],
@@ -435,7 +435,7 @@ def _validate_generated_code(
     process_label: str | None = None,
 ) -> str | None:
     """Run the smallest-instance validation used before the full benchmark set."""
-    pre_result = execute_agent_code(
+    pre_result = await execute_agent_code_async(
         code,
         jobs,
         config.sandbox,
