@@ -98,6 +98,10 @@ def _format_connect_error(backend_kind: str, configured_base_url: str, attempted
             "Make sure your vLLM server is running and serving an OpenAI-compatible "
             "API on the configured port."
         ),
+        "mlx-lm": (
+            "Make sure your mlx-lm server is running (`mlx_lm.server --model <model>`) "
+            "and serving an OpenAI-compatible API on the configured port."
+        ),
     }[backend_kind]
     return (
         f"Could not connect to the configured {backend_kind} backend at {normalized}. "

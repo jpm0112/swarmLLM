@@ -16,7 +16,7 @@ def test_supported_backends_for_windows():
 
 
 def test_supported_backends_for_apple_silicon():
-    assert supported_backends_for_platform("Darwin", "arm64") == ["ollama", "vllm-metal"]
+    assert supported_backends_for_platform("Darwin", "arm64") == ["ollama", "vllm-metal", "mlx-lm"]
 
 
 def test_supported_backends_for_linux():

@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 
-BackendKind = Literal["ollama", "vllm-metal", "vllm"]
+BackendKind = Literal["ollama", "vllm-metal", "vllm", "mlx-lm"]
 
 
 @dataclass

@@ -32,6 +32,7 @@ DEFAULT_PROFILE_BY_BACKEND = {
     "ollama": os.path.join("configs", "backends", "ollama.local.example.toml"),
     "vllm-metal": os.path.join("configs", "backends", "vllm-metal.local.example.toml"),
     "vllm": os.path.join("configs", "backends", "vllm.single-node.example.toml"),
+    "mlx-lm": os.path.join("configs", "backends", "mlx-lm.local.example.toml"),
 }
 
 DEFAULT_VLLM_CONFIG_BY_BACKEND = {
@@ -43,6 +44,9 @@ DEFAULT_VLLM_EXECUTABLE_BY_BACKEND = {
     "vllm-metal": os.path.join("~", ".venv-vllm-metal", "bin", "vllm"),
     "vllm": "vllm",
 }
+
+DEFAULT_MLX_LM_CONFIG = os.path.join("configs", "mlx-lm", "serve.example.yaml")
+DEFAULT_MLX_LM_EXECUTABLE = "mlx_lm.server"
 
 
 @dataclass
@@ -72,6 +76,7 @@ def supported_backends_for_platform(system_name: str, machine: str) -> list[str]
         backends = ["ollama"]
         if machine in {"arm64", "aarch64"}:
             backends.append("vllm-metal")
+            backends.append("mlx-lm")
         return backends
     return ["ollama", "vllm"]
 
@@ -149,6 +154,11 @@ def backend_notes(backend: str) -> str:
         return (
             "Can auto-start an Apple Silicon vLLM Metal server, typically from "
             "~/.venv-vllm-metal/bin/vllm, using the example single-node settings."
+        )
+    if backend == "mlx-lm":
+        return (
+            "Can auto-start a local mlx-lm server (`mlx_lm.server`) on Apple Silicon. "
+            "Useful for models that run better with the MLX framework."
         )
     return (
         "Can auto-start a local vLLM server for single-node use. Cluster or cloud "
@@ -335,6 +345,65 @@ def build_local_vllm_server_spec(
     )
 
 
+def build_mlx_lm_serve_command(executable: str, config_values: dict[str, Any]) -> list[str]:
+    """Build an `mlx_lm.server ...` command from a flat template mapping."""
+    if "model" not in config_values:
+        raise ValueError("mlx-lm config must define `model`.")
+    command = [os.path.expanduser(executable), "--model", str(config_values["model"])]
+    for key in ["host", "port", "api-key", "log-level", "max-tokens"]:
+        if key in config_values:
+            command.extend([f"--{key}", str(config_values[key])])
+    return command
+
+
+def build_local_mlx_lm_server_spec(
+    profile_path: str,
+    output_dir: str,
+    env: dict[str, str],
+) -> LocalServerSpec:
+    """Build the launch command and environment for a local mlx-lm backend."""
+    profile = load_backend_profile(profile_path)
+    endpoint = profile.coordinator_endpoints[0]
+    base_url = endpoint.base_url
+    host, port = parse_base_url(base_url)
+    api_key_env = endpoint.api_key_env
+
+    config_path = ask(
+        "mlx-lm config path",
+        DEFAULT_MLX_LM_CONFIG,
+        "Use a simple YAML template to seed the launch command.",
+    )
+    if not os.path.exists(config_path):
+        raise FileNotFoundError(f"mlx-lm config not found: {config_path}")
+
+    executable = ask(
+        "mlx_lm.server executable",
+        DEFAULT_MLX_LM_EXECUTABLE,
+        "Path to the `mlx_lm.server` executable (or just `mlx_lm.server` if on PATH).",
+    )
+
+    config_values = parse_flat_yaml(config_path)
+    config_values["host"] = host
+    config_values["port"] = port
+
+    api_key = resolve_api_key(endpoint, profile.kind)
+    if api_key and api_key not in {"EMPTY", ""}:
+        config_values["api-key"] = api_key
+    if api_key_env:
+        env[api_key_env] = api_key
+
+    command = build_mlx_lm_serve_command(executable, config_values)
+    log_path = os.path.join(output_dir, "mlx-lm_server.log")
+    return LocalServerSpec(
+        executable=os.path.expanduser(executable),
+        command=command,
+        api_key_env=api_key_env,
+        api_key=api_key,
+        base_url=base_url,
+        log_path=log_path,
+    )
+
+
 def wait_for_backend_ready(
     base_url: str,
     api_key: str,
@@ -410,7 +479,10 @@ def ensure_local_vllm_server(
     except RuntimeError:
         pass
 
-    spec = build_local_vllm_server_spec(backend, profile_path, output_dir, env)
+    if backend == "mlx-lm":
+        spec = build_local_mlx_lm_server_spec(profile_path, output_dir, env)
+    else:
+        spec = build_local_vllm_server_spec(backend, profile_path, output_dir, env)
     log_handle = open(spec.log_path, "w", encoding="utf-8")
     process = subprocess.Popen(
         spec.command,
@@ -540,7 +612,7 @@ def main():
 
     run_env = os.environ.copy()
     server_state = LocalServerState(process=None, log_path=None, started=False)
-    if backend in {"vllm-metal", "vllm"}:
+    if backend in {"vllm-metal", "vllm", "mlx-lm"}:
         try:
             server_state = ensure_local_vllm_server(backend, profile_path, output_dir, run_env)
         except (FileNotFoundError, RuntimeError, ValueError) as exc:
