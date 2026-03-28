@@ -14,6 +14,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal, Protocol, TextIO
 
+try:  # pragma: no cover - platform-specific import
+    import select
+    import termios
+    import tty
+except ImportError:  # pragma: no cover - Windows
+    select = None
+    termios = None
+    tty = None
+
 import psutil
 from rich import box
 from rich.console import Console, Group
@@ -29,6 +38,8 @@ from swarmllm.tracking.token_tracker import TokenUsage
 DashboardRequest = Literal["auto", "plain", "tui"]
 DashboardMode = Literal["plain", "tui"]
 EventLevel = Literal["debug", "info", "warning", "error"]
+DashboardView = Literal["overview", "agents", "processes", "detail"]
+DashboardDetailKind = Literal["agent", "process"]
 
 
 def resolve_dashboard_mode(requested: DashboardRequest, is_tty: bool) -> DashboardMode:
@@ -90,6 +101,20 @@ class AgentState:
     completed_at: str | None = None
     llm_time_seconds: float = 0.0
     exec_time_seconds: float = 0.0
+    last_model: str = ""
+    last_prompt_tokens: int = 0
+    last_completion_tokens: int = 0
+    last_thinking_tokens: int = 0
+    last_total_tokens: int = 0
+    last_llm_duration_seconds: float = 0.0
+    total_prompt_tokens: int = 0
+    total_completion_tokens: int = 0
+    total_thinking_tokens: int = 0
+    total_tokens: int = 0
+    llm_call_count: int = 0
+    last_instance_scores: dict[str, float] = field(default_factory=dict)
+    last_instance_errors: dict[str, str] = field(default_factory=dict)
+    last_approach: str = ""
 
 
 @dataclass
@@ -106,6 +131,8 @@ class ProcessState:
     age_seconds: float = 0.0
     cpu_percent: float = 0.0
     rss_mb: float = 0.0
+    command: str = ""
+    cwd: str = ""
 
 
 @dataclass
@@ -140,6 +167,17 @@ class ThroughputSnapshot:
 
 
 @dataclass
+class DashboardUIState:
+    """Interactive TUI state such as active view and current selection."""
+
+    active_view: DashboardView = "overview"
+    detail_kind: DashboardDetailKind = "agent"
+    selected_agent_id: int | None = None
+    selected_process_pid: int | None = None
+    last_key: str = ""
+
+
+@dataclass
 class LiveRunState:
     """Full live snapshot written to disk and rendered in the dashboard."""
 
@@ -166,6 +204,7 @@ class LiveRunState:
     recent_events: list[TelemetryEvent] = field(default_factory=list)
     recent_logs: list[str] = field(default_factory=list)
     output_files: dict[str, str] = field(default_factory=dict)
+    ui: DashboardUIState = field(default_factory=DashboardUIState)
 
 
 class TelemetrySink(Protocol):
@@ -230,6 +269,8 @@ class TelemetrySink(Protocol):
         kind: str,
         role: str = "",
         metadata: dict[str, Any] | None = None,
+        command: str = "",
+        cwd: str = "",
     ) -> None:
         """Track a live process."""
 
@@ -339,17 +380,48 @@ class DashboardRenderer:
         layout.split_column(
             Layout(name="summary", size=3),
             Layout(name="main", ratio=1),
+            Layout(name="footer", size=3),
         )
-        layout["main"].split_row(Layout(name="left", ratio=3), Layout(name="right", ratio=2))
+        layout["summary"].update(self._summary_panel(state))
+        self._render_main(layout["main"], state)
+        layout["footer"].update(self._footer_panel(state))
+        return layout
+
+    def _render_main(self, layout: Layout, state: LiveRunState) -> None:
+        view = state.ui.active_view
+        if view == "agents":
+            layout.split_column(
+                Layout(name="content", ratio=4),
+                Layout(name="events", ratio=2),
+            )
+            layout["content"].split_row(Layout(name="table", ratio=3), Layout(name="detail", ratio=2))
+            layout["table"].update(self._agent_panel(state, max_rows=26, compact=False))
+            layout["detail"].update(self._detail_panel(state))
+            layout["events"].update(self._events_panel(state))
+            return
+        if view == "processes":
+            layout.split_column(
+                Layout(name="content", ratio=4),
+                Layout(name="events", ratio=2),
+            )
+            layout["content"].split_row(Layout(name="table", ratio=3), Layout(name="detail", ratio=2))
+            layout["table"].update(self._process_panel(state, max_rows=18, compact=False))
+            layout["detail"].update(self._detail_panel(state))
+            layout["events"].update(self._events_panel(state))
+            return
+        if view == "detail":
+            layout.split_row(Layout(name="detail", ratio=3), Layout(name="events", ratio=2))
+            layout["detail"].update(self._detail_panel(state, expanded=True))
+            layout["events"].update(self._events_panel(state))
+            return
+
+        layout.split_row(Layout(name="left", ratio=3), Layout(name="right", ratio=2))
         layout["left"].split_column(Layout(name="agents", ratio=3), Layout(name="iterations", ratio=2))
         layout["right"].split_column(Layout(name="processes", ratio=2), Layout(name="events", ratio=3))
-
-        layout["summary"].update(self._summary_panel(state))
-        layout["agents"].update(self._agent_panel(state))
+        layout["agents"].update(self._agent_panel(state, max_rows=12, compact=True))
         layout["iterations"].update(self._iteration_panel(state))
-        layout["processes"].update(self._process_panel(state))
+        layout["processes"].update(self._process_panel(state, max_rows=8, compact=True))
         layout["events"].update(self._events_panel(state))
-        return layout
 
     def _summary_panel(self, state: LiveRunState) -> Panel:
         summary = Table.grid(expand=True)
@@ -383,11 +455,11 @@ class DashboardRenderer:
             f"[bold white]Agent TPS[/] {state.throughput.rolling_agent_tps:.1f} rolling",
             f"[bold white]Coord TPS[/] {state.throughput.rolling_coordinator_tps:.1f} rolling",
             f"[bold white]Baseline[/] {state.best_baseline if state.best_baseline is not None else 'n/a'}",
-            f"[bold white]Mode[/] {state.dashboard_mode}",
+            f"[bold white]View[/] {state.ui.active_view}",
         )
         return Panel(summary, title="Swarm Monitor", border_style="cyan")
 
-    def _agent_panel(self, state: LiveRunState) -> Panel:
+    def _agent_panel(self, state: LiveRunState, *, max_rows: int, compact: bool) -> Panel:
         table = Table(expand=True, box=box.SIMPLE_HEAVY)
         table.add_column("Agent", justify="right", width=5)
         table.add_column("Mode", width=8)
@@ -396,15 +468,20 @@ class DashboardRenderer:
         table.add_column("Elapsed", justify="right", width=7)
         table.add_column("Score", justify="right", width=10)
         table.add_column("Retry", justify="right", width=5)
+        if not compact:
+            table.add_column("LLM", justify="right", width=5)
+            table.add_column("Tokens", justify="right", width=10)
+            table.add_column("Last Call", justify="right", width=10)
         table.add_column("Direction / Failure", overflow="fold")
 
-        for agent_id in sorted(state.agents):
+        visible_agents, start, end = self._windowed_agents(state, max_rows)
+        for agent_id in visible_agents:
             agent = state.agents[agent_id]
             descriptor = agent.direction
             if agent.failure_reason:
                 descriptor = f"{agent.direction}\n[red]{agent.failure_reason}[/red]"
             score = "n/a" if agent.latest_score is None else str(agent.latest_score)
-            table.add_row(
+            row = [
                 str(agent.agent_id),
                 agent.mode,
                 _truncate(agent.endpoint_label or "n/a", 16),
@@ -412,12 +489,27 @@ class DashboardRenderer:
                 f"{agent.elapsed_seconds:.1f}s",
                 score,
                 str(agent.retry_count),
-                _truncate(descriptor, 180),
-            )
+            ]
+            if not compact:
+                row.extend([
+                    str(agent.llm_call_count),
+                    f"{agent.total_tokens:,}",
+                    f"{agent.last_total_tokens:,}" if agent.last_total_tokens else "n/a",
+                ])
+            row.append(_truncate(descriptor, 180 if compact else 140))
+            row_style = "bold reverse" if agent.agent_id == state.ui.selected_agent_id else ""
+            table.add_row(*row, style=row_style)
 
         if not state.agents:
-            table.add_row("-", "-", "-", "-", "-", "-", "-", "No agents yet")
-        return Panel(table, title="Agents", border_style="green")
+            empty = ["-", "-", "-", "-", "-", "-", "-"]
+            if not compact:
+                empty.extend(["-", "-", "-"])
+            empty.append("No agents yet")
+            table.add_row(*empty)
+        title = "Agents"
+        if state.agents:
+            title = f"Agents ({start + 1}-{end} of {len(state.agents)})"
+        return Panel(table, title=title, border_style="green")
 
     def _iteration_panel(self, state: LiveRunState) -> Panel:
         table = Table(expand=True, box=box.SIMPLE)
@@ -448,7 +540,7 @@ class DashboardRenderer:
             table.add_row("-", "-", "-", "-", "-", "-", "-", "No iterations yet")
         return Panel(table, title="Iterations", border_style="yellow")
 
-    def _process_panel(self, state: LiveRunState) -> Panel:
+    def _process_panel(self, state: LiveRunState, *, max_rows: int, compact: bool) -> Panel:
         table = Table(expand=True, box=box.SIMPLE)
         table.add_column("Label", overflow="fold")
         table.add_column("PID", justify="right", width=7)
@@ -457,11 +549,13 @@ class DashboardRenderer:
         table.add_column("Age", justify="right", width=7)
         table.add_column("Kind", width=10)
         table.add_column("Status", width=8)
+        if not compact:
+            table.add_column("Context", overflow="fold")
 
-        visible = [item for item in state.processes.values() if item.status == "running"]
-        visible.sort(key=lambda item: (item.kind, item.label, item.pid))
+        visible, start, end = self._windowed_processes(state, max_rows)
         for proc in visible:
-            table.add_row(
+            context = self._format_process_context(proc)
+            row = [
                 _truncate(proc.label, 36),
                 str(proc.pid),
                 f"{proc.cpu_percent:.1f}",
@@ -469,11 +563,23 @@ class DashboardRenderer:
                 f"{proc.age_seconds:.1f}s",
                 proc.kind,
                 proc.status,
-            )
+            ]
+            if not compact:
+                row.append(_truncate(context, 56))
+            row_style = "bold reverse" if proc.pid == state.ui.selected_process_pid else ""
+            table.add_row(*row, style=row_style)
 
-        if not visible:
-            table.add_row("-", "-", "-", "-", "-", "-", "No active processes")
-        return Panel(table, title="Processes", border_style="magenta")
+        if not state.processes:
+            empty = ["-", "-", "-", "-", "-", "-", "-"]
+            if not compact:
+                empty.append("No active processes")
+            else:
+                empty[-1] = "No active processes"
+            table.add_row(*empty)
+        title = "Processes"
+        if state.processes:
+            title = f"Processes ({start + 1}-{end} of {len(state.processes)})"
+        return Panel(table, title=title, border_style="magenta")
 
     def _events_panel(self, state: LiveRunState) -> Panel:
         lines: list[Text] = []
@@ -491,6 +597,179 @@ class DashboardRenderer:
         if not lines:
             lines.append(Text("Waiting for telemetry..."))
         return Panel(Group(*lines), title="Events / Logs", border_style="blue")
+
+    def _detail_panel(self, state: LiveRunState, *, expanded: bool = False) -> Panel:
+        if state.ui.detail_kind == "process":
+            return self._process_detail_panel(state, expanded=expanded)
+        return self._agent_detail_panel(state, expanded=expanded)
+
+    def _agent_detail_panel(self, state: LiveRunState, *, expanded: bool) -> Panel:
+        agent = self._selected_agent(state)
+        lines: list[Text] = []
+        if agent is None:
+            lines.append(Text("No agent selected. Use j/k in overview or agents view."))
+            return Panel(Group(*lines), title="Agent Detail", border_style="green")
+
+        lines.extend([
+            Text(f"Agent {agent.agent_id}  iter={agent.iteration}  mode={agent.mode}  phase={agent.phase}"),
+            Text(f"Endpoint: {agent.endpoint_label or 'n/a'}"),
+            Text(
+                "Elapsed: "
+                f"{agent.elapsed_seconds:.1f}s  LLM: {agent.llm_time_seconds:.1f}s  "
+                f"Exec: {agent.exec_time_seconds:.1f}s  Retry: {agent.retry_count}"
+            ),
+            Text(
+                "Tokens: "
+                f"{agent.total_tokens:,} total  "
+                f"({agent.total_prompt_tokens:,} prompt + {agent.total_completion_tokens:,} completion"
+                + (f", {agent.total_thinking_tokens:,} thinking" if agent.total_thinking_tokens else "")
+                + ")"
+            ),
+            Text(
+                "Last call: "
+                f"{agent.last_total_tokens:,} tokens in {agent.last_llm_duration_seconds:.1f}s"
+                if agent.last_total_tokens
+                else "Last call: n/a"
+            ),
+        ])
+        if agent.last_model:
+            lines.append(Text(f"Model: {agent.last_model}"))
+        if agent.latest_score is not None:
+            lines.append(Text(f"Latest score: {agent.latest_score}"))
+        if agent.last_approach:
+            lines.append(Text(f"Approach: {_truncate(agent.last_approach, 160 if expanded else 90)}"))
+        lines.append(Text(""))
+        lines.append(Text("Direction", style="bold white"))
+        lines.append(Text(agent.direction or "n/a"))
+        if agent.failure_reason:
+            lines.append(Text(""))
+            lines.append(Text("Failure", style="bold white"))
+            lines.append(Text(agent.failure_reason, style="red"))
+        if agent.last_instance_scores or agent.last_instance_errors:
+            lines.append(Text(""))
+            lines.append(Text("Instance Results", style="bold white"))
+            for name, score in sorted(agent.last_instance_scores.items()):
+                lines.append(Text(f"{name}: {score}"))
+            for name, error in sorted(agent.last_instance_errors.items()):
+                lines.append(Text(f"{name}: {_truncate(error, 160 if expanded else 90)}", style="red"))
+
+        related = self._related_process_lines(state, agent.agent_id)
+        if related:
+            lines.append(Text(""))
+            lines.append(Text("Related Processes", style="bold white"))
+            lines.extend(related)
+        return Panel(Group(*lines), title=f"Agent Detail ({agent.agent_id})", border_style="green")
+
+    def _process_detail_panel(self, state: LiveRunState, *, expanded: bool) -> Panel:
+        proc = self._selected_process(state)
+        lines: list[Text] = []
+        if proc is None:
+            lines.append(Text("No process selected. Switch to process view and use j/k."))
+            return Panel(Group(*lines), title="Process Detail", border_style="magenta")
+
+        lines.extend([
+            Text(f"{proc.label}  pid={proc.pid}"),
+            Text(f"Kind: {proc.kind}  Role: {proc.role or 'n/a'}  Status: {proc.status}"),
+            Text(f"CPU: {proc.cpu_percent:.1f}%  RSS: {proc.rss_mb:.1f}MB  Age: {proc.age_seconds:.1f}s"),
+        ])
+        if proc.command:
+            lines.append(Text(f"Command: {_truncate(proc.command, 220 if expanded else 120)}"))
+        if proc.cwd:
+            lines.append(Text(f"CWD: {proc.cwd}"))
+        if proc.metadata:
+            lines.append(Text(""))
+            lines.append(Text("Metadata", style="bold white"))
+            for key, value in sorted(proc.metadata.items()):
+                lines.append(Text(f"{key}: {_truncate(str(value), 220 if expanded else 100)}"))
+        agent_id = proc.metadata.get("agent_id") if proc.metadata else None
+        if agent_id is not None and agent_id in state.agents:
+            agent = state.agents[agent_id]
+            lines.append(Text(""))
+            lines.append(Text("Related Agent", style="bold white"))
+            lines.append(Text(f"Agent {agent.agent_id}  phase={agent.phase}  tokens={agent.total_tokens:,}"))
+            lines.append(Text(_truncate(agent.direction, 220 if expanded else 120)))
+        return Panel(Group(*lines), title=f"Process Detail ({proc.pid})", border_style="magenta")
+
+    def _footer_panel(self, state: LiveRunState) -> Panel:
+        selected = (
+            f"agent={state.ui.selected_agent_id if state.ui.selected_agent_id is not None else '-'}  "
+            f"process={state.ui.selected_process_pid if state.ui.selected_process_pid is not None else '-'}"
+        )
+        footer = Table.grid(expand=True)
+        footer.add_column(ratio=4)
+        footer.add_column(justify="right", ratio=2)
+        footer.add_row(
+            "Views: o overview  a agents  p processes  d detail  tab cycle  "
+            "j/k move  g/G first/last  [ / ] detail target",
+            f"Detail={state.ui.detail_kind}  Selected {selected}",
+        )
+        return Panel(footer, border_style="cyan")
+
+    def _windowed_agents(self, state: LiveRunState, max_rows: int) -> tuple[list[int], int, int]:
+        agent_ids = sorted(state.agents)
+        return self._window_values(agent_ids, state.ui.selected_agent_id, max_rows)
+
+    def _windowed_processes(self, state: LiveRunState, max_rows: int) -> tuple[list[ProcessState], int, int]:
+        processes = sorted(state.processes.values(), key=lambda item: (item.kind, item.label, item.pid))
+        selected_pid = state.ui.selected_process_pid
+        values, start, end = self._window_values(processes, selected_pid, max_rows, key=lambda item: item.pid)
+        return values, start, end
+
+    def _window_values(
+        self,
+        values: list[Any],
+        selected_value: Any,
+        max_rows: int,
+        *,
+        key=None,
+    ) -> tuple[list[Any], int, int]:
+        if not values:
+            return [], 0, 0
+        key = key or (lambda value: value)
+        try:
+            selected_index = next(idx for idx, value in enumerate(values) if key(value) == selected_value)
+        except StopIteration:
+            selected_index = 0
+        max_rows = max(1, max_rows)
+        start = max(0, min(len(values) - max_rows, selected_index - max_rows // 2))
+        end = min(len(values), start + max_rows)
+        return values[start:end], start, end
+
+    def _selected_agent(self, state: LiveRunState) -> AgentState | None:
+        if not state.agents:
+            return None
+        if state.ui.selected_agent_id in state.agents:
+            return state.agents[state.ui.selected_agent_id]
+        return state.agents[sorted(state.agents)[0]]
+
+    def _selected_process(self, state: LiveRunState) -> ProcessState | None:
+        if not state.processes:
+            return None
+        if state.ui.selected_process_pid in state.processes:
+            return state.processes[state.ui.selected_process_pid]
+        pid = sorted(state.processes)[0]
+        return state.processes[pid]
+
+    def _related_process_lines(self, state: LiveRunState, agent_id: int) -> list[Text]:
+        lines: list[Text] = []
+        for proc in sorted(state.processes.values(), key=lambda item: item.pid):
+            if proc.metadata.get("agent_id") == agent_id:
+                lines.append(
+                    Text(
+                        f"{proc.pid} {proc.label}  cpu={proc.cpu_percent:.1f}%  "
+                        f"rss={proc.rss_mb:.1f}MB  {self._format_process_context(proc)}"
+                    )
+                )
+        return lines
+
+    def _format_process_context(self, proc: ProcessState) -> str:
+        pieces: list[str] = []
+        for key in ["agent_id", "iteration", "instance", "stage", "package", "kind"]:
+            if key in proc.metadata:
+                pieces.append(f"{key}={proc.metadata[key]}")
+        if "log_path" in proc.metadata:
+            pieces.append(f"log={proc.metadata['log_path']}")
+        return ", ".join(pieces) if pieces else "n/a"
 
 
 class RunTelemetry:
@@ -518,8 +797,13 @@ class RunTelemetry:
         self._dashboard_failed = False
         self._real_stdout: TextIO = sys.stdout
         self._real_stderr: TextIO = sys.stderr
+        self._real_stdin: TextIO = sys.stdin
         self._console = Console(file=self._real_stdout, force_terminal=self.is_tty) if self.mode == "tui" else None
         self._live: Live | None = None
+        self._input_thread: threading.Thread | None = None
+        self._input_enabled = False
+        self._stdin_fd: int | None = None
+        self._stdin_attrs: list[Any] | None = None
         self._echo_output = self.mode == "plain"
         self._run_log_handle = (self.output_dir / "run.log").open("w", encoding="utf-8", buffering=1)
         self._events_path = self.output_dir / "events.jsonl"
@@ -546,6 +830,7 @@ class RunTelemetry:
         )
         self._process_handles[os.getpid()] = psutil.Process(os.getpid())
         self._prime_cpu_counter(os.getpid())
+        self._ensure_selections_locked()
         self._init_dashboard()
         self.refresh_now()
         if start_thread:
@@ -567,6 +852,7 @@ class RunTelemetry:
                 redirect_stderr=False,
             )
             self._live.start()
+            self._start_input_listener()
         except Exception as exc:  # pragma: no cover - defensive fail-open path
             self._dashboard_failed = True
             self._echo_output = True
@@ -686,9 +972,13 @@ class RunTelemetry:
             state.elapsed_seconds = 0.0
             state.started_at = None
             state.completed_at = None
+            state.last_instance_scores = {}
+            state.last_instance_errors = {}
+            state.last_approach = ""
             self.state.current_iteration = iteration
             self.state.iterations.setdefault(iteration, IterationState(iteration=iteration))
             self._recompute_agent_counts_locked()
+            self._ensure_selections_locked()
         self.emit_event(
             "agent_queued",
             message=f"Agent {agent_id} queued on {endpoint_label}",
@@ -729,6 +1019,7 @@ class RunTelemetry:
             if state.started_at is None and status == "running":
                 state.started_at = _utc_now_iso()
             self._recompute_agent_counts_locked()
+            self._ensure_selections_locked()
         self.refresh_now()
 
     def complete_agent(
@@ -741,6 +1032,9 @@ class RunTelemetry:
         exec_time_seconds: float,
         runtime_seconds: float,
         failure_reason: str | None = None,
+        instance_scores: dict[str, float] | None = None,
+        instance_errors: dict[str, str] | None = None,
+        approach: str | None = None,
     ) -> None:
         with self._lock:
             state = self.state.agents.setdefault(agent_id, AgentState(agent_id=agent_id))
@@ -753,6 +1047,9 @@ class RunTelemetry:
             state.exec_time_seconds = exec_time_seconds
             state.failure_reason = failure_reason or ""
             state.completed_at = _utc_now_iso()
+            state.last_instance_scores = dict(instance_scores or {})
+            state.last_instance_errors = dict(instance_errors or {})
+            state.last_approach = approach or state.last_approach
             item = self.state.iterations.setdefault(iteration, IterationState(iteration=iteration))
             if success:
                 item.successful += 1
@@ -773,6 +1070,7 @@ class RunTelemetry:
             if self.state.best_score is not None:
                 item.best_score_overall = self.state.best_score
             self._recompute_agent_counts_locked()
+            self._ensure_selections_locked()
         self.refresh_now()
 
     def record_new_best(self, iteration: int, agent_id: int, score: float, approach: str) -> None:
@@ -805,6 +1103,20 @@ class RunTelemetry:
             self._throughput.record(role, total_tokens, duration_seconds)
             self.state.total_tokens += total_tokens
             self.state.throughput = self._throughput.snapshot()
+            if role != "coordinator" and agent_id is not None:
+                agent = self.state.agents.setdefault(agent_id, AgentState(agent_id=agent_id))
+                agent.last_model = model
+                agent.last_llm_duration_seconds = duration_seconds
+                agent.llm_call_count += 1
+                if usage is not None:
+                    agent.last_prompt_tokens = usage.prompt_tokens
+                    agent.last_completion_tokens = usage.completion_tokens
+                    agent.last_thinking_tokens = usage.thinking_tokens
+                    agent.last_total_tokens = usage.total_tokens
+                    agent.total_prompt_tokens += usage.prompt_tokens
+                    agent.total_completion_tokens += usage.completion_tokens
+                    agent.total_thinking_tokens += usage.thinking_tokens
+                    agent.total_tokens += usage.total_tokens
         self.emit_event(
             "llm_call_completed",
             message=f"{role} call completed in {duration_seconds:.1f}s",
@@ -826,6 +1138,8 @@ class RunTelemetry:
         kind: str,
         role: str = "",
         metadata: dict[str, Any] | None = None,
+        command: str = "",
+        cwd: str = "",
     ) -> None:
         try:
             process = psutil.Process(pid)
@@ -841,7 +1155,10 @@ class RunTelemetry:
                 kind=kind,
                 role=role,
                 metadata=metadata or {},
+                command=command,
+                cwd=cwd,
             )
+            self._ensure_selections_locked()
         self.refresh_now()
 
     def unregister_process(self, pid: int) -> None:
@@ -849,6 +1166,7 @@ class RunTelemetry:
             self._process_handles.pop(pid, None)
             if pid in self.state.processes and pid != os.getpid():
                 self.state.processes.pop(pid, None)
+            self._ensure_selections_locked()
         self.refresh_now()
 
     def refresh_now(self) -> None:
@@ -873,6 +1191,9 @@ class RunTelemetry:
         self._stop_event.set()
         if self._thread is not None:
             self._thread.join(timeout=max(self.refresh_interval_seconds * 4, 1.0))
+        if self._input_thread is not None:
+            self._input_thread.join(timeout=1.0)
+        self._restore_terminal()
         self.refresh_now()
         if self._live is not None:
             try:
@@ -887,6 +1208,8 @@ class RunTelemetry:
         self._echo_output = True
         self.mode = "plain"
         self.state.dashboard_mode = "plain"
+        self._input_enabled = False
+        self._restore_terminal()
         if self._live is not None:
             try:
                 self._live.stop()
@@ -896,9 +1219,129 @@ class RunTelemetry:
         self._real_stderr.write(f"Dashboard disabled: {exc}\n")
         self._real_stderr.flush()
 
+    def handle_input_key(self, key: str) -> None:
+        """Handle a single dashboard navigation key."""
+        if not key:
+            return
+        with self._lock:
+            ui = self.state.ui
+            normalized = self._normalize_key(key)
+            if not normalized:
+                return
+            ui.last_key = normalized
+            if normalized in {"tab"}:
+                views: list[DashboardView] = ["overview", "agents", "processes", "detail"]
+                ui.active_view = views[(views.index(ui.active_view) + 1) % len(views)]
+                if ui.active_view == "agents":
+                    ui.detail_kind = "agent"
+                elif ui.active_view == "processes":
+                    ui.detail_kind = "process"
+            elif normalized in {"1", "o"}:
+                ui.active_view = "overview"
+            elif normalized in {"2", "a"}:
+                ui.active_view = "agents"
+                ui.detail_kind = "agent"
+            elif normalized in {"3", "p"}:
+                ui.active_view = "processes"
+                ui.detail_kind = "process"
+            elif normalized in {"4", "d"}:
+                ui.active_view = "detail"
+            elif normalized in {"[", "]"}:
+                ui.detail_kind = "process" if normalized == "]" else "agent"
+            elif normalized in {"j", "down"}:
+                self._move_selection_locked(1)
+            elif normalized in {"k", "up"}:
+                self._move_selection_locked(-1)
+            elif normalized == "g":
+                self._jump_selection_locked(first=True)
+            elif normalized == "G":
+                self._jump_selection_locked(first=False)
+            self._ensure_selections_locked()
+        self.refresh_now()
+
     def _refresh_loop(self) -> None:
         while not self._stop_event.wait(self.refresh_interval_seconds):
             self.refresh_now()
+
+    def _start_input_listener(self) -> None:
+        if self.mode != "tui" or not self.is_tty or not self._real_stdin.isatty():
+            return
+        self._input_enabled = True
+        if os.name != "nt" and termios is not None and tty is not None:
+            try:
+                self._stdin_fd = self._real_stdin.fileno()
+                self._stdin_attrs = termios.tcgetattr(self._stdin_fd)
+                tty.setcbreak(self._stdin_fd)
+            except Exception:  # pragma: no cover - terminal-specific
+                self._stdin_fd = None
+                self._stdin_attrs = None
+        self._input_thread = threading.Thread(target=self._input_loop, name="swarmllm-input", daemon=True)
+        self._input_thread.start()
+
+    def _restore_terminal(self) -> None:
+        if self._stdin_fd is None or self._stdin_attrs is None or termios is None:
+            return
+        try:  # pragma: no cover - terminal-specific
+            termios.tcsetattr(self._stdin_fd, termios.TCSADRAIN, self._stdin_attrs)
+        except Exception:
+            pass
+        finally:
+            self._stdin_fd = None
+            self._stdin_attrs = None
+
+    def _input_loop(self) -> None:
+        while not self._stop_event.is_set() and self._input_enabled:
+            key = self._read_key()
+            if key:
+                self.handle_input_key(key)
+            else:
+                time.sleep(0.05)
+
+    def _read_key(self) -> str:
+        if os.name == "nt":  # pragma: no cover - Windows-only branch
+            try:
+                import msvcrt
+            except ImportError:
+                return ""
+            if not msvcrt.kbhit():
+                return ""
+            ch = msvcrt.getwch()
+            if ch in {"\x00", "\xe0"} and msvcrt.kbhit():
+                special = msvcrt.getwch()
+                return {"H": "up", "P": "down"}.get(special, "")
+            if ch == "\t":
+                return "tab"
+            return ch
+
+        if self._stdin_fd is None or select is None:
+            return ""
+        try:  # pragma: no cover - terminal-specific
+            ready, _, _ = select.select([self._stdin_fd], [], [], 0.1)
+            if not ready:
+                return ""
+            ch = os.read(self._stdin_fd, 1).decode("utf-8", errors="ignore")
+            if ch == "\x1b":
+                ready, _, _ = select.select([self._stdin_fd], [], [], 0.01)
+                if ready:
+                    tail = os.read(self._stdin_fd, 2).decode("utf-8", errors="ignore")
+                    return {"[A": "up", "[B": "down"}.get(tail, "")
+                return ""
+            if ch == "\t":
+                return "tab"
+            return ch
+        except Exception:
+            return ""
+
+    def _normalize_key(self, key: str) -> str:
+        if key in {"tab", "up", "down", "[", "]"}:
+            return key
+        if key == "g":
+            return "g"
+        if key == "G":
+            return "G"
+        if len(key) == 1:
+            return key
+        return ""
 
     def _serialize_state_locked(self) -> dict[str, Any]:
         payload = asdict(self.state)
@@ -933,6 +1376,51 @@ class RunTelemetry:
             else:
                 counts["running"] += 1
         self.state.agent_counts = counts
+
+    def _ensure_selections_locked(self) -> None:
+        agent_ids = sorted(self.state.agents)
+        process_pids = sorted(self.state.processes)
+        if agent_ids and self.state.ui.selected_agent_id not in self.state.agents:
+            self.state.ui.selected_agent_id = agent_ids[0]
+        if not agent_ids:
+            self.state.ui.selected_agent_id = None
+        if process_pids and self.state.ui.selected_process_pid not in self.state.processes:
+            self.state.ui.selected_process_pid = process_pids[0]
+        if not process_pids:
+            self.state.ui.selected_process_pid = None
+
+    def _move_selection_locked(self, delta: int) -> None:
+        if self._selection_kind_locked() == "process":
+            pids = sorted(self.state.processes)
+            if not pids:
+                return
+            current = self.state.ui.selected_process_pid
+            index = pids.index(current) if current in pids else 0
+            self.state.ui.selected_process_pid = pids[max(0, min(len(pids) - 1, index + delta))]
+        else:
+            agent_ids = sorted(self.state.agents)
+            if not agent_ids:
+                return
+            current = self.state.ui.selected_agent_id
+            index = agent_ids.index(current) if current in agent_ids else 0
+            self.state.ui.selected_agent_id = agent_ids[max(0, min(len(agent_ids) - 1, index + delta))]
+
+    def _jump_selection_locked(self, *, first: bool) -> None:
+        if self._selection_kind_locked() == "process":
+            pids = sorted(self.state.processes)
+            if pids:
+                self.state.ui.selected_process_pid = pids[0] if first else pids[-1]
+        else:
+            agent_ids = sorted(self.state.agents)
+            if agent_ids:
+                self.state.ui.selected_agent_id = agent_ids[0] if first else agent_ids[-1]
+
+    def _selection_kind_locked(self) -> DashboardDetailKind:
+        if self.state.ui.active_view == "processes":
+            return "process"
+        if self.state.ui.active_view == "agents":
+            return "agent"
+        return self.state.ui.detail_kind
 
     def _prime_cpu_counter(self, pid: int, process: psutil.Process | None = None) -> None:
         handle = process or psutil.Process(pid)

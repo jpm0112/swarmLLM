@@ -11,3 +11,4 @@ prompts/
 *.tmp
 lit_review/
 literature_review.json
+.env

@@ -30,6 +30,7 @@ from swarmllm.llm.profiles import load_backend_profile, loopback_base_url_candid
 
 DEFAULT_PROFILE_BY_BACKEND = {
     "ollama": os.path.join("configs", "backends", "ollama.local.example.toml"),
+    "ollama-cloud": os.path.join("configs", "backends", "ollama.cloud.example.toml"),
     "vllm-metal": os.path.join("configs", "backends", "vllm-metal.local.example.toml"),
     "vllm": os.path.join("configs", "backends", "vllm.single-node.example.toml"),
     "mlx-lm": os.path.join("configs", "backends", "mlx-lm.local.example.toml"),
@@ -71,14 +72,14 @@ def supported_backends_for_platform(system_name: str, machine: str) -> list[str]
     system_name = system_name.lower()
     machine = machine.lower()
     if system_name == "windows":
-        return ["ollama"]
+        return ["ollama", "ollama-cloud"]
     if system_name == "darwin":
-        backends = ["ollama"]
+        backends = ["ollama", "ollama-cloud"]
         if machine in {"arm64", "aarch64"}:
             backends.append("vllm-metal")
             backends.append("mlx-lm")
         return backends
-    return ["ollama", "vllm"]
+    return ["ollama", "ollama-cloud", "vllm"]
 
 
 def ask(prompt: str, default: str, explanation: str = "") -> str:
@@ -150,6 +151,11 @@ def pick_backend(options: list[str]) -> str:
 def backend_notes(backend: str) -> str:
     if backend == "ollama":
         return "Expect a running Ollama server exposing its OpenAI-compatible API."
+    if backend == "ollama-cloud":
+        return (
+            "Uses the Ollama cloud API. Requires an API key set via OLLAMA_API_KEY "
+            "or entered during setup."
+        )
     if backend == "vllm-metal":
         return (
             "Can auto-start an Apple Silicon vLLM Metal server, typically from "
@@ -539,7 +545,12 @@ def main():
 
     coordinator_model = profile.coordinator.model
     worker_model = profile.worker.model
-    if backend == "ollama":
+    if backend in {"ollama", "ollama-cloud"}:
+        if backend == "ollama-cloud" and not os.environ.get("OLLAMA_API_KEY"):
+            print()
+            api_key_input = input("  OLLAMA_API_KEY: ").strip()
+            if api_key_input:
+                os.environ["OLLAMA_API_KEY"] = api_key_input
         api_key = resolve_api_key(profile.coordinator_endpoints[0], profile.kind)
         coordinator_model, worker_model = choose_ollama_models(
             profile.coordinator_endpoints[0].base_url,

@@ -517,6 +517,9 @@ async def _run_agents_parallel(
                     exec_time_seconds=result.get("exec_time", 0.0),
                     runtime_seconds=elapsed,
                     failure_reason=result.get("failure_reason"),
+                    instance_scores=result.get("instance_scores"),
+                    instance_errors=result.get("instance_errors"),
+                    approach=result.get("approach"),
                 )
                 telemetry.emit_event(
                     "agent_completed",

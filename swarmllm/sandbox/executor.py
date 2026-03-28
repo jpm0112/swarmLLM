@@ -167,6 +167,8 @@ def _run_subprocess(
             kind="python",
             role="sandbox",
             metadata=metadata or {},
+            command=" ".join(command),
+            cwd=cwd,
         )
     try:
         stdout, stderr = process.communicate(timeout=timeout)

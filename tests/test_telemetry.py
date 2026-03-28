@@ -65,6 +65,9 @@ def test_run_telemetry_writes_events_and_live_state(tmp_path):
     assert state["best_baseline"] == 100.0
     assert state["agent_counts"]["done"] == 1
     assert state["agents"]["0"]["phase"] == "done"
+    assert state["agents"]["0"]["total_tokens"] == 50
+    assert state["agents"]["0"]["llm_call_count"] == 1
+    assert state["agents"]["0"]["last_model"] == "worker-model"
     assert any(event["event_type"] == "custom_event" for event in events)
     assert (tmp_path / "run.log").exists()
 
@@ -106,3 +109,65 @@ def test_run_telemetry_refreshes_process_metrics(monkeypatch, tmp_path):
     assert proc_state["cpu_percent"] == 12.5
     assert round(proc_state["rss_mb"], 1) == 50.0
     assert proc_state["status"] == "running"
+
+
+def test_run_telemetry_handles_view_navigation(tmp_path):
+    class FakeMemory:
+        rss = 30 * 1024 * 1024
+
+    class FakeProcess:
+        def __init__(self, pid):
+            self.pid = pid
+
+        def cpu_percent(self, interval=None):
+            return 3.0
+
+        def memory_info(self):
+            return FakeMemory()
+
+        def create_time(self):
+            return time.time() - 2.0
+
+        def is_running(self):
+            return True
+
+    import swarmllm.tracking.telemetry as telemetry_mod
+
+    original_process = telemetry_mod.psutil.Process
+    telemetry_mod.psutil.Process = FakeProcess
+    try:
+        telemetry = RunTelemetry(
+            str(tmp_path),
+            requested_mode="plain",
+            is_tty=False,
+            start_thread=False,
+        )
+        telemetry.queue_agent(0, iteration=1, mode="explore", direction="Try EDD", endpoint_label="worker-a")
+        telemetry.queue_agent(1, iteration=1, mode="explore", direction="Try SPT", endpoint_label="worker-b")
+        telemetry.register_process(
+            999999,
+            label="sandbox child",
+            kind="python",
+            role="sandbox",
+            metadata={"agent_id": 1, "instance": "tiny"},
+            command="python agent_run.py",
+            cwd="/tmp/swarmllm",
+        )
+
+        telemetry.handle_input_key("a")
+        telemetry.handle_input_key("j")
+        telemetry.handle_input_key("d")
+        telemetry.handle_input_key("]")
+        telemetry.handle_input_key("G")
+        telemetry.refresh_now()
+        telemetry.close(status="completed")
+    finally:
+        telemetry_mod.psutil.Process = original_process
+
+    state = json.loads((tmp_path / "live_state.json").read_text(encoding="utf-8"))
+    assert state["ui"]["active_view"] == "detail"
+    assert state["ui"]["detail_kind"] == "process"
+    assert state["ui"]["selected_agent_id"] == 1
+    assert state["ui"]["selected_process_pid"] == 999999
+    assert state["processes"]["999999"]["command"] == "python agent_run.py"
+    assert state["processes"]["999999"]["cwd"] == "/tmp/swarmllm"
