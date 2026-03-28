@@ -14,12 +14,15 @@ Main loop that ties everything together:
 """
 
 import asyncio
+import contextlib
 import json
 import os
+import sys
 import time
 from dataclasses import asdict
 
 from swarmllm.config import Config
+from swarmllm.llm.schemas import DirectionAssignment
 from swarmllm.problems.scheduling import (
     generate_instance,
     save_instance,
@@ -35,24 +38,64 @@ from swarmllm.llm.health import validate_backend_or_raise
 from swarmllm.llm.routing import EndpointRouter
 from swarmllm.tracking.shared_log import SharedLog
 from swarmllm.tracking.prompt_logger import PromptLogger
+from swarmllm.tracking.telemetry import DashboardRequest, RunTelemetry
 from swarmllm.tracking.token_tracker import TokenTracker
 
 
-async def run_swarm(config: Config, output_dir: str = "."):
+async def run_swarm(
+    config: Config,
+    output_dir: str = ".",
+    dashboard_mode: DashboardRequest = "auto",
+):
     """Run the full swarm optimization loop."""
+    telemetry = RunTelemetry(output_dir, requested_mode=dashboard_mode, is_tty=sys.stdout.isatty())
+    telemetry.set_run_metadata(
+        total_iterations=config.swarm.num_iterations,
+        total_agents=config.swarm.num_agents,
+        current_stage="starting",
+    )
+    telemetry.emit_event(
+        "run_started",
+        message="Swarm run started",
+        backend_kind=config.llm.backend_kind,
+        output_dir=output_dir,
+    )
+    _register_launcher_process(telemetry)
+
+    try:
+        with contextlib.redirect_stdout(telemetry.stdout_mirror()), contextlib.redirect_stderr(telemetry.stderr_mirror()):
+            result = await _run_swarm_impl(config, output_dir, telemetry)
+        telemetry.close(status="completed")
+        return result
+    except Exception as exc:
+        telemetry.emit_event(
+            "run_failed",
+            message=f"Run failed: {exc}",
+            level="error",
+        )
+        telemetry.close(status="failed")
+        raise
+
+
+async def _run_swarm_impl(config: Config, output_dir: str, telemetry: RunTelemetry):
+    """Run the inner swarm loop with redirected logging and telemetry."""
     print("=" * 60)
     print("  SwarmLLM — Multi-Agent Optimization")
     print("=" * 60)
     print()
 
+    telemetry.set_stage("backend validation")
+    telemetry.emit_event("backend_validation_started", message=f"Validating {config.llm.backend_kind} backend profile")
     print(f"[0/3] Validating {config.llm.backend_kind} backend profile...")
     await validate_backend_or_raise(config.llm)
     router = EndpointRouter(config.llm)
+    telemetry.emit_event("backend_validation_completed", message="Backend validation passed")
     print("  Backend validation passed.")
     print()
 
     # 1. Generate problem instances (one per profile)
     profiles = config.problem.instances
+    telemetry.set_stage("problem generation")
     print(f"[1/3] Generating {len(profiles)} problem instances...")
     problems = []
     instance_names = []  # human-readable names for each instance
@@ -105,6 +148,12 @@ async def run_swarm(config: Config, output_dir: str = "."):
         agg_baselines[name] = sum(all_baselines[n][name] for n in instance_names)
 
     best_agg_name = min(agg_baselines, key=agg_baselines.get)
+    telemetry.set_baseline(min(agg_baselines.values()))
+    telemetry.emit_event(
+        "baselines_ready",
+        message=f"Computed baselines across {len(instance_names)} instances",
+        aggregate_baselines=agg_baselines,
+    )
     print(f"\n  {'—' * 56}")
     print(f"  AGGREGATE (sum across all instances) — target to beat:")
     for name, score in agg_baselines.items():
@@ -132,6 +181,7 @@ async def run_swarm(config: Config, output_dir: str = "."):
     # 3. Main loop
     best_score = min(agg_baselines.values())
     best_approach = "baseline"
+    telemetry.set_best_score(best_score)
     best_instance_scores = {}  # per-instance scores for best solution
     # Track top solutions (score, approach, code) for exploit agents
     top_solutions = []
@@ -139,40 +189,109 @@ async def run_swarm(config: Config, output_dir: str = "."):
     iteration_stats = []
 
     for iteration in range(1, config.swarm.num_iterations + 1):
+        telemetry.start_iteration(iteration)
+        telemetry.emit_event("iteration_started", message=f"Iteration {iteration} started", iteration=iteration)
         print(f"{'=' * 60}")
         print(f"  Iteration {iteration}/{config.swarm.num_iterations}")
         print(f"{'=' * 60}")
 
         # Get directions from coordinator LLM
+        coord_endpoint = router.coordinator_endpoint()
         if iteration == 1:
+            telemetry.set_stage("coordinator planning")
+            telemetry.emit_event(
+                "coordinator_request_started",
+                message="Coordinator assigning initial directions",
+                iteration=iteration,
+                endpoint_label=coord_endpoint.label or coord_endpoint.base_url,
+            )
             print("  Coordinator assigning initial directions...")
-            directions, coord_tokens = await get_initial_directions(
+            coord_start = time.time()
+            assignments, coord_tokens = await get_initial_directions(
                 config=config,
-                endpoint=router.coordinator_endpoint(),
+                endpoint=coord_endpoint,
                 prompt_logger=prompt_logger,
             )
+            coord_duration = time.time() - coord_start
             if coord_tokens:
-                token_tracker.record("coordinator", iteration, None,
-                                     config.llm.coordinator_model, coord_tokens)
+                token_tracker.record(
+                    "coordinator",
+                    iteration,
+                    None,
+                    config.llm.coordinator_model,
+                    coord_tokens,
+                    duration_seconds=coord_duration,
+                )
+                telemetry.record_llm_call(
+                    role="coordinator",
+                    iteration=iteration,
+                    agent_id=None,
+                    model=config.llm.coordinator_model,
+                    duration_seconds=coord_duration,
+                    usage=coord_tokens,
+                    endpoint_label=coord_endpoint.label or coord_endpoint.base_url,
+                )
+            telemetry.emit_event(
+                "coordinator_request_completed",
+                message=f"Coordinator returned {len(assignments)} assignments",
+                iteration=iteration,
+                duration_seconds=coord_duration,
+            )
         else:
+            telemetry.set_stage("coordinator analysis")
+            telemetry.emit_event(
+                "coordinator_request_started",
+                message=f"Coordinator analyzing iteration {iteration - 1}",
+                iteration=iteration,
+                endpoint_label=coord_endpoint.label or coord_endpoint.base_url,
+            )
             print("  Coordinator analyzing results...")
             last_iter_content = log.read_iteration(iteration - 1)
             best_solution = top_solutions[0] if top_solutions else None
-            analysis, directions, coord_tokens = await get_next_directions(
+            coord_start = time.time()
+            analysis, assignments, coord_tokens = await get_next_directions(
                 iteration=iteration,
                 last_iteration_content=last_iter_content,
                 config=config,
-                endpoint=router.coordinator_endpoint(),
+                endpoint=coord_endpoint,
                 prompt_logger=prompt_logger,
                 best_solution=best_solution,
             )
+            coord_duration = time.time() - coord_start
             if coord_tokens:
-                token_tracker.record("coordinator", iteration, None,
-                                     config.llm.coordinator_model, coord_tokens)
+                token_tracker.record(
+                    "coordinator",
+                    iteration,
+                    None,
+                    config.llm.coordinator_model,
+                    coord_tokens,
+                    duration_seconds=coord_duration,
+                )
+                telemetry.record_llm_call(
+                    role="coordinator",
+                    iteration=iteration,
+                    agent_id=None,
+                    model=config.llm.coordinator_model,
+                    duration_seconds=coord_duration,
+                    usage=coord_tokens,
+                    endpoint_label=coord_endpoint.label or coord_endpoint.base_url,
+                )
+            telemetry.emit_event(
+                "coordinator_request_completed",
+                message=f"Coordinator analyzed iteration {iteration - 1}",
+                iteration=iteration,
+                duration_seconds=coord_duration,
+            )
             print(f"  Coordinator analysis: {analysis[:200]}...")
             log.append_coordinator_summary(iteration, analysis)
+            telemetry.emit_event(
+                "coordinator_analysis_logged",
+                message=_truncate_analysis(analysis),
+                iteration=iteration,
+            )
 
         # Run agents with concurrency limit
+        telemetry.set_stage("agent execution")
         print(f"  Running {config.swarm.num_agents} agents "
               f"(max {config.swarm.max_concurrent_agents} concurrent)...")
         print(f"  Testing on {len(profiles)} instances: {', '.join(instance_names)}")
@@ -182,13 +301,14 @@ async def run_swarm(config: Config, output_dir: str = "."):
         named_problems = list(zip(instance_names, problems))
 
         results = await _run_agents_parallel(
-            directions=directions,
+            assignments=assignments,
             problems=named_problems,
             config=config,
             router=router,
             iteration=iteration,
             prompt_logger=prompt_logger,
             top_solutions=top_solutions,
+            telemetry=telemetry,
         )
 
         elapsed = time.time() - start_time
@@ -198,8 +318,14 @@ async def run_swarm(config: Config, output_dir: str = "."):
         successful = 0
         for result in results:
             if result.get("token_usage"):
-                token_tracker.record("agent", iteration, result["agent_id"],
-                                     config.llm.agent_model, result["token_usage"])
+                token_tracker.record(
+                    "agent",
+                    iteration,
+                    result["agent_id"],
+                    config.llm.agent_model,
+                    result["token_usage"],
+                    duration_seconds=result.get("llm_time"),
+                )
             log.append_result(
                 iteration=iteration,
                 agent_id=result["agent_id"],
@@ -234,6 +360,7 @@ async def run_swarm(config: Config, output_dir: str = "."):
                     best_score = result["score"]
                     best_approach = result["approach"]
                     best_instance_scores = result.get("instance_scores", {})
+                    telemetry.record_new_best(iteration, result["agent_id"], result["score"], result["approach"])
                     parts = []
                     for n in instance_names:
                         if n in result.get("instance_scores", {}):
@@ -278,6 +405,25 @@ async def run_swarm(config: Config, output_dir: str = "."):
             "avg_exec_time": sum(exec_times) / len(exec_times) if exec_times else 0,
         }
         iteration_stats.append(iter_stat)
+        telemetry.finish_iteration(
+            iteration,
+            successful=successful,
+            failed=config.swarm.num_agents - successful,
+            best_score_this_iter=iter_stat["best_score_this_iter"],
+            best_score_overall=best_score,
+            wall_time_seconds=elapsed,
+            avg_llm_time_seconds=iter_stat["avg_llm_time"],
+            avg_exec_time_seconds=iter_stat["avg_exec_time"],
+            failure_counts=failure_counts,
+        )
+        telemetry.emit_event(
+            "iteration_completed",
+            message=f"Iteration {iteration} completed",
+            iteration=iteration,
+            successful=successful,
+            failed=config.swarm.num_agents - successful,
+            best_score_overall=best_score,
+        )
 
         print(f"  Results: {successful}/{config.swarm.num_agents} successful, "
               f"best aggregate: {best_score}")
@@ -295,27 +441,60 @@ async def run_swarm(config: Config, output_dir: str = "."):
 
 
 async def _run_agents_parallel(
-    directions: list[str],
+    assignments: list[DirectionAssignment],
     problems: list[tuple[str, ProblemInstance]],
     config: Config,
     router: EndpointRouter,
     iteration: int = 0,
     prompt_logger: PromptLogger | None = None,
     top_solutions: list[dict] | None = None,
+    telemetry: RunTelemetry | None = None,
 ) -> list[dict]:
     """Run all agents with a concurrency semaphore."""
     semaphore = asyncio.Semaphore(config.swarm.max_concurrent_agents)
+    scheduled = [(assignment, router.worker_endpoint()) for assignment in assignments]
 
-    async def run_with_limit(agent_id, direction):
+    for assignment, endpoint in scheduled:
+        endpoint_label = endpoint.label or endpoint.base_url
+        if telemetry:
+            telemetry.queue_agent(
+                assignment.agent_id,
+                iteration,
+                assignment.mode,
+                assignment.direction,
+                endpoint_label,
+            )
+            telemetry.emit_event(
+                "agent_assignment",
+                message=f"Agent {assignment.agent_id} assigned {assignment.mode}",
+                agent_id=assignment.agent_id,
+                iteration=iteration,
+                mode=assignment.mode,
+                endpoint_label=endpoint_label,
+                direction=assignment.direction,
+            )
+
+    async def run_with_limit(agent_id: int, assignment: DirectionAssignment, endpoint):
         async with semaphore:
-            print(f"    Agent {agent_id:2d}: {direction[:100]}...")
+            endpoint_label = endpoint.label or endpoint.base_url
+            if telemetry:
+                telemetry.set_agent_phase(
+                    agent_id,
+                    iteration,
+                    phase="llm",
+                    status="running",
+                    endpoint_label=endpoint_label,
+                    direction=assignment.direction,
+                    mode=assignment.mode,
+                )
+            print(f"    Agent {agent_id:2d}: {assignment.direction[:100]}...")
             agent_start = time.time()
-            endpoint = router.worker_endpoint()
             result = await run_agent(
-                agent_id, direction, problems, config,
+                agent_id, assignment.direction, problems, config,
                 endpoint=endpoint,
                 iteration=iteration, prompt_logger=prompt_logger,
                 top_solutions=top_solutions,
+                telemetry=telemetry,
             )
             elapsed = time.time() - agent_start
             result["runtime"] = elapsed
@@ -328,15 +507,72 @@ async def _run_agents_parallel(
                 reason = _categorize_failure(result.get("error", ""))
                 result["failure_reason"] = reason
                 status = f"FAILED ({reason}) [{timing}]"
+            if telemetry:
+                telemetry.complete_agent(
+                    agent_id=agent_id,
+                    iteration=iteration,
+                    success=result["success"],
+                    score=result["score"],
+                    llm_time_seconds=result.get("llm_time", 0.0),
+                    exec_time_seconds=result.get("exec_time", 0.0),
+                    runtime_seconds=elapsed,
+                    failure_reason=result.get("failure_reason"),
+                )
+                telemetry.emit_event(
+                    "agent_completed",
+                    message=f"Agent {agent_id} {'succeeded' if result['success'] else 'failed'}",
+                    level="info" if result["success"] else "warning",
+                    agent_id=agent_id,
+                    iteration=iteration,
+                    success=result["success"],
+                    score=result["score"],
+                    failure_reason=result.get("failure_reason"),
+                )
             print(f"    Agent {agent_id:2d} done: {status}")
             return result
 
     tasks = [
-        run_with_limit(i, directions[i])
-        for i in range(len(directions))
+        run_with_limit(assignment.agent_id, assignment, endpoint)
+        for assignment, endpoint in scheduled
     ]
 
     return await asyncio.gather(*tasks)
+
+
+def _register_launcher_process(telemetry: RunTelemetry) -> None:
+    """Register an auto-started local backend process when launched by setup_run.py."""
+    raw_pid = os.environ.get("SWARMLLM_LOCAL_SERVER_PID")
+    if not raw_pid:
+        return
+    try:
+        pid = int(raw_pid)
+    except ValueError:
+        return
+    kind = os.environ.get("SWARMLLM_LOCAL_SERVER_KIND", "backend")
+    log_path = os.environ.get("SWARMLLM_LOCAL_SERVER_LOG_PATH", "")
+    label = f"{kind} server"
+    telemetry.register_process(
+        pid=pid,
+        label=label,
+        kind="backend",
+        role="model-server",
+        metadata={"log_path": log_path, "kind": kind},
+    )
+    telemetry.emit_event(
+        "local_backend_registered",
+        message=f"Tracking local {kind} server (pid {pid})",
+        pid=pid,
+        kind=kind,
+        log_path=log_path,
+    )
+
+
+def _truncate_analysis(analysis: str, limit: int = 220) -> str:
+    """Shorten coordinator analysis for the recent-events feed."""
+    compact = " ".join(analysis.split())
+    if len(compact) <= limit:
+        return compact
+    return f"{compact[: limit - 1]}..."
 
 
 def _categorize_failure(error: str) -> str:
@@ -609,25 +845,32 @@ def _print_final_summary(log, all_baselines, agg_baselines, best_score, best_app
         out(f"    Total tokens:        {token_tracker.total_tokens:>12,}")
         out(f"      Prompt tokens:     {token_tracker.total_prompt:>12,}")
         out(f"      Completion tokens: {token_tracker.total_completion:>12,}")
+        if token_tracker.total_thinking:
+            out(f"      Thinking tokens:   {token_tracker.total_thinking:>12,}  (subset of completion)")
         out()
         agent_calls = len([c for c in token_tracker._calls if c["role"] == "agent"])
         coord_calls = len([c for c in token_tracker._calls if c["role"] == "coordinator"])
         out(f"    Agent tokens:        {token_tracker.agent_total:>12,} ({agent_calls} calls)")
         out(f"      Prompt:            {token_tracker.agent_prompt:>12,}")
         out(f"      Completion:        {token_tracker.agent_completion:>12,}")
+        if token_tracker.agent_thinking:
+            out(f"      Thinking:          {token_tracker.agent_thinking:>12,}  (subset of completion)")
         if agent_calls > 0:
             out(f"      Avg per call:      {token_tracker.agent_total // agent_calls:>12,}")
         out(f"    Coordinator tokens:  {token_tracker.coordinator_total:>12,} ({coord_calls} calls)")
         out(f"      Prompt:            {token_tracker.coordinator_prompt:>12,}")
         out(f"      Completion:        {token_tracker.coordinator_completion:>12,}")
+        if token_tracker.coordinator_thinking:
+            out(f"      Thinking:          {token_tracker.coordinator_thinking:>12,}  (subset of completion)")
         if coord_calls > 0:
             out(f"      Avg per call:      {token_tracker.coordinator_total // coord_calls:>12,}")
         out()
         out("    Per iteration:")
         for it in sorted(token_tracker._iteration_totals.keys()):
             s = token_tracker._iteration_totals[it]
+            thinking_str = f", thinking: {s['thinking_tokens']:,}" if s.get("thinking_tokens") else ""
             out(f"      Iter {it:>2}: {s['total_tokens']:>10,} tokens "
-                f"(prompt: {s['prompt_tokens']:,}, completion: {s['completion_tokens']:,}) "
+                f"(prompt: {s['prompt_tokens']:,}, completion: {s['completion_tokens']:,}{thinking_str}) "
                 f"| {s['agent_calls']} agents + {s['coordinator_calls']} coordinator")
         token_tracker.save(output_dir)
 
