@@ -25,7 +25,7 @@ from swarmllm.tracking.token_tracker import TokenUsage
 FIX_PROMPT = """\
 Your previous draft failed when tested on the smallest instance ({num_jobs} jobs).
 
-Error:
+Full error traceback:
 {error}
 
 Previous code:
@@ -148,7 +148,7 @@ Write a general algorithm and do not hardcode for a specific instance.
 
         fix_prompt = FIX_PROMPT.format(
             num_jobs=len(smallest_problem.jobs),
-            error=pre_error[:1000],
+            error=pre_error,
             code=code,
         )
         try:
