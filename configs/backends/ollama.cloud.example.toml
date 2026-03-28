@@ -1,7 +1,7 @@
 name = "ollama-cloud"
 kind = "ollama"
 request_timeout = 300
-default_max_concurrent_agents = 8
+default_max_concurrent_agents = 2
 
 [coordinator]
 model = "qwen2.5-coder:14b"
