@@ -480,7 +480,7 @@ function Demo() {
   const playerRef = useRef(null)
 
   useEffect(() => {
-    const player = AsciinemaPlayer.create('/demo.cast', playerRef.current, {
+    const player = AsciinemaPlayer.create(`${import.meta.env.BASE_URL}demo.cast`, playerRef.current, {
       fit: 'width',
       autoPlay: false,
       controls: true,
