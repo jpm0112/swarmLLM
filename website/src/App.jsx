@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import * as AsciinemaPlayer from 'asciinema-player'
+import 'asciinema-player/dist/bundle/asciinema-player.css'
 import './App.css'
 
 // ── NAV ──────────────────────────────────────────────────────────────────────
@@ -22,6 +24,7 @@ function Nav() {
         <a href="#features">Features</a>
         <a href="#architecture">Architecture</a>
         <a href="#getting-started">Get Started</a>
+        <a href="#demo">Demo</a>
         <a href="https://github.com/jpm0112/swarmLLM" target="_blank" rel="noreferrer" className="nav__github">
           GitHub ↗
         </a>
@@ -472,6 +475,36 @@ function GettingStarted() {
   )
 }
 
+// ── DEMO ─────────────────────────────────────────────────────────────────────
+function Demo() {
+  const playerRef = useRef(null)
+
+  useEffect(() => {
+    const player = AsciinemaPlayer.create('/demo.cast', playerRef.current, {
+      fit: 'width',
+      autoPlay: false,
+      controls: true,
+      speed: 1.5,
+      idleTimeLimit: 1,
+      theme: 'monokai',
+    })
+    return () => player.dispose()
+  }, [])
+
+  return (
+    <section className="demo" id="demo">
+      <div className="container">
+        <div className="section-label">Live Demo</div>
+        <h2 className="section-title">See it run.</h2>
+        <div className="demo__player" ref={playerRef} />
+        <p className="demo__caption">
+          Setup + full TUI run on <strong>ollama-cloud</strong> · recorded with asciinema
+        </p>
+      </div>
+    </section>
+  )
+}
+
 // ── TEAM ─────────────────────────────────────────────────────────────────────
 function Team() {
   return (
@@ -548,6 +581,7 @@ export default function App() {
       <Features />
       <Architecture />
       <GettingStarted />
+      <Demo />
       <Team />
       <Footer />
     </>

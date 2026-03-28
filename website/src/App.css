@@ -932,6 +932,38 @@
   letter-spacing: 0.10em;
 }
 
+/* ── DEMO ────────────────────────────────────────────────────────────────── */
+.demo {
+  padding: 120px 0;
+  border-top: 1px solid var(--border);
+}
+
+.demo__player {
+  border: 1px solid var(--border-bright);
+  overflow: hidden;
+  margin-bottom: 20px;
+  /* Override asciinema-player defaults to match site theme */
+  --color-bg: var(--void);
+}
+
+/* Blend the player chrome with our dark theme */
+.demo__player .ap-wrapper {
+  background: var(--void);
+}
+
+.demo__caption {
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.10em;
+}
+
+.demo__caption strong {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
 /* ── RESPONSIVE ──────────────────────────────────────────────────────────── */
 @media (max-width: 900px) {
   .container { padding: 0 28px; }
