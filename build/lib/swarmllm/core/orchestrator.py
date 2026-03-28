@@ -179,12 +179,8 @@ async def _run_swarm_impl(config: Config, output_dir: str, telemetry: RunTelemet
     best_score = min(agg_baselines.values())
     best_approach = "baseline"
     telemetry.set_best_score(best_score)
-    best_instance_scores = {}  # per-instance scores for best solution
-    # Track top solutions (score, approach, code) for coordinator context
+    best_instance_scores = {}
     top_solutions = []
-    # Index of all agent results keyed by (agent_id, iteration) for exploit context
-    result_index: dict[tuple[int, int], dict] = {}
-    # Track per-iteration stats for summary
     iteration_stats = []
 
     for iteration in range(1, config.swarm.num_iterations + 1):
@@ -309,7 +305,7 @@ async def _run_swarm_impl(config: Config, output_dir: str, telemetry: RunTelemet
             router=router,
             iteration=iteration,
             prompt_logger=prompt_logger,
-            result_index=result_index,
+            top_solutions=top_solutions,
             telemetry=telemetry,
         )
 
@@ -345,15 +341,6 @@ async def _run_swarm_impl(config: Config, output_dir: str, telemetry: RunTelemet
                 llm_time=result.get("llm_time"),
                 exec_time=result.get("exec_time"),
             )
-
-            # Index result for exploit context in subsequent iterations
-            result_index[(result["agent_id"], iteration)] = {
-                "agent_id": result["agent_id"],
-                "iteration": iteration,
-                "approach": result.get("approach", ""),
-                "code": result.get("code", ""),
-                "notes": result.get("notes", ""),
-            }
 
             if result["success"]:
                 successful += 1
@@ -449,19 +436,6 @@ async def _run_swarm_impl(config: Config, output_dir: str, telemetry: RunTelemet
     return best_score, best_approach
 
 
-def _build_source_context(
-    assignment: DirectionAssignment,
-    result_index: dict[tuple[int, int], dict],
-) -> list[dict]:
-    """Resolve source_refs from an assignment into a list of agent result dicts."""
-    context = []
-    for ref in assignment.source_refs:
-        key = (ref.agent_id, ref.iteration)
-        if key in result_index:
-            context.append(result_index[key])
-    return context
-
-
 async def _run_agents_parallel(
     assignments: list[DirectionAssignment],
     problems: list[tuple[str, ProblemInstance]],
@@ -470,7 +444,7 @@ async def _run_agents_parallel(
     router: EndpointRouter,
     iteration: int = 0,
     prompt_logger: PromptLogger | None = None,
-    result_index: dict[tuple[int, int], dict] | None = None,
+    top_solutions: list[dict] | None = None,
     telemetry: RunTelemetry | None = None,
 ) -> list[dict]:
     """Run all agents with a concurrency semaphore."""
@@ -512,13 +486,12 @@ async def _run_agents_parallel(
                 )
             print(f"    Agent {agent_id:2d}: {assignment.direction[:100]}...")
             agent_start = time.time()
-            source_context = _build_source_context(assignment, result_index or {})
             result = await run_agent(
                 agent_id, assignment.direction, problems, config,
                 problem=problem,
                 endpoint=endpoint,
                 iteration=iteration, prompt_logger=prompt_logger,
-                source_context=source_context or None,
+                top_solutions=top_solutions,
                 telemetry=telemetry,
             )
             elapsed = time.time() - agent_start
@@ -542,9 +515,6 @@ async def _run_agents_parallel(
                     exec_time_seconds=result.get("exec_time", 0.0),
                     runtime_seconds=elapsed,
                     failure_reason=result.get("failure_reason"),
-                    instance_scores=result.get("instance_scores"),
-                    instance_errors=result.get("instance_errors"),
-                    approach=result.get("approach"),
                 )
                 telemetry.emit_event(
                     "agent_completed",

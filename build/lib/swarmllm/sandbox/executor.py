@@ -14,7 +14,6 @@ import sys
 import json
 import tempfile
 import os
-import asyncio
 
 from swarmllm.config import SandboxConfig
 from swarmllm.tracking.telemetry import TelemetrySink
@@ -132,28 +131,6 @@ def execute_agent_code(
             pass
 
 
-async def execute_agent_code_async(
-    code: str,
-    input_data: list[dict],
-    config: SandboxConfig,
-    function_name: str = "schedule",
-    telemetry: TelemetrySink | None = None,
-    process_label: str | None = None,
-    process_metadata: dict | None = None,
-) -> dict:
-    """Run sandbox execution without blocking the event loop."""
-    return await asyncio.to_thread(
-        execute_agent_code,
-        code,
-        input_data,
-        config,
-        function_name,
-        telemetry,
-        process_label,
-        process_metadata,
-    )
-
-
 def _extract_missing_module(stderr: str) -> str | None:
     """Extract module name from ModuleNotFoundError traceback."""
     import re
@@ -188,8 +165,6 @@ def _run_subprocess(
             kind="python",
             role="sandbox",
             metadata=metadata or {},
-            command=" ".join(command),
-            cwd=cwd,
         )
     try:
         stdout, stderr = process.communicate(timeout=timeout)

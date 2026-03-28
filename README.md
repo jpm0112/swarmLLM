@@ -88,6 +88,14 @@ Each run folder now includes:
 - `run.log` for mirrored console output
 - the existing `results_log.md`, `summary.txt`, `token_usage.json`, `prompts/`, `instances/`, and `config.json`
 
+TUI controls:
+
+- `o`, `a`, `p`, `d` switch between overview, agents, processes, and detail views
+- `tab` cycles views
+- `j` / `k` move the current selection
+- `g` / `G` jump to the first or last item in the active list
+- `[` / `]` switch the detail pane between agent and process context
+
 ## Backends
 
 - `ollama` is the default local-iteration and Windows-friendly path.

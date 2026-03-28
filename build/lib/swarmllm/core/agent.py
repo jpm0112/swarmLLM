@@ -17,34 +17,10 @@ from swarmllm.config import Config, LLMEndpoint
 from swarmllm.llm.factory import build_worker_agent
 from swarmllm.llm.schemas import WorkerDraft
 from swarmllm.problems import ProblemBase, ProblemInstance
-from swarmllm.sandbox.executor import execute_agent_code_async
+from swarmllm.sandbox.executor import execute_agent_code
 from swarmllm.tracking.prompt_logger import PromptLogger
 from swarmllm.tracking.telemetry import TelemetrySink
 from swarmllm.tracking.token_tracker import TokenUsage, UsageSnapshot
-
-
-def _build_source_section(source_context: list[dict]) -> str:
-    """Build the exploit context section for the agent prompt."""
-    lines = ["## Prior Work to Build On", ""]
-    lines.append(
-        "The following solutions are provided as context. Refine, combine, or"
-        " improve on these approaches as directed."
-    )
-    for ref in source_context:
-        lines.append("")
-        lines.append(
-            f"### Agent {ref['agent_id']} — Iteration {ref['iteration']}"
-            f" — {ref['approach']}"
-        )
-        if ref.get("notes"):
-            lines.append(f"**Notes:** {ref['notes']}")
-        lines.append("")
-        lines.append("```python")
-        lines.append(ref["code"])
-        lines.append("```")
-    lines.append("")
-    return "\n".join(lines)
-
 
 
 async def run_agent(
@@ -56,7 +32,7 @@ async def run_agent(
     endpoint: LLMEndpoint,
     iteration: int = 0,
     prompt_logger: PromptLogger | None = None,
-    source_context: list[dict] | None = None,
+    top_solutions: list[dict] | None = None,
     telemetry: TelemetrySink | None = None,
 ) -> dict:
     """
@@ -65,15 +41,13 @@ async def run_agent(
     Returns a dict with:
         agent_id, direction, approach, code, score, success, error, notes,
         instance_scores, instance_errors, token_usage, llm_time, exec_time
-
-    source_context: list of prior agent results (agent_id, iteration, code,
-        notes, approach) to inject into the prompt for exploit-mode agents.
     """
+    del top_solutions  # Reserved for future exploit-agent prompt tuning.
+
     _, example_problem = problems[0]
     instance_desc = ", ".join(
         f"{name} ({len(problem.prepare_input(p))} items)" for name, p in problems
     )
-    source_section = _build_source_section(source_context) if source_context else ""
     problem_desc = problem.get_agent_user_prompt(example_problem, instance_desc)
 
     prompt = f"""{problem_desc}
@@ -82,7 +56,7 @@ Your code will be tested on {len(problems)} diverse instances: {instance_desc}.
 They vary in size and characteristics.
 Write a general algorithm — do not hardcode for a specific instance.
 
-{source_section}## Research Direction
+## Research Direction
 
 {direction}
 """
@@ -181,7 +155,7 @@ Write a general algorithm — do not hardcode for a specific instance.
             iteration=iteration,
             stage="precheck",
         )
-    pre_error = await _validate_generated_code(
+    pre_error = _validate_generated_code(
         code,
         smallest_problem,
         smallest_input,
@@ -262,7 +236,7 @@ Write a general algorithm — do not hardcode for a specific instance.
                 endpoint_label=endpoint_label,
                 direction=direction,
             )
-        pre_error = await _validate_generated_code(
+        pre_error = _validate_generated_code(
             code,
             smallest_problem,
             smallest_input,
@@ -301,7 +275,7 @@ Write a general algorithm — do not hardcode for a specific instance.
     for inst_name, inst in problems:
         input_data = problem.prepare_input(inst)
 
-        exec_result = await execute_agent_code_async(
+        exec_result = execute_agent_code(
             code,
             input_data,
             config.sandbox,
@@ -416,7 +390,7 @@ async def _request_worker_draft(
     return result, TokenUsage.from_usage_delta(usage_before, usage_after)
 
 
-async def _validate_generated_code(
+def _validate_generated_code(
     code: str,
     instance: ProblemInstance,
     input_data: list[dict],
@@ -429,7 +403,7 @@ async def _validate_generated_code(
     process_label: str | None = None,
 ) -> str | None:
     """Run the smallest-instance validation used before the full benchmark set."""
-    pre_result = await execute_agent_code_async(
+    pre_result = execute_agent_code(
         code,
         input_data,
         config.sandbox,

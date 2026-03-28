@@ -1,0 +1,2 @@
+[console_scripts]
+swarmllm = scripts.run:main
