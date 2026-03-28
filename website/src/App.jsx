@@ -22,7 +22,7 @@ function Nav() {
         <a href="#features">Features</a>
         <a href="#architecture">Architecture</a>
         <a href="#getting-started">Get Started</a>
-        <a href="https://github.com/zilikons/swarmLLM" target="_blank" rel="noreferrer" className="nav__github">
+        <a href="https://github.com/jpm0112/swarmLLM" target="_blank" rel="noreferrer" className="nav__github">
           GitHub ↗
         </a>
       </div>
@@ -146,7 +146,7 @@ function Hero() {
           Coordinator-guided LLM swarms<br />for combinatorial optimization
         </p>
         <div className="hero__ctas">
-          <a href="https://github.com/zilikons/swarmLLM" target="_blank" rel="noreferrer" className="btn btn--primary">
+          <a href="https://github.com/jpm0112/swarmLLM" target="_blank" rel="noreferrer" className="btn btn--primary">
             View on GitHub ↗
           </a>
           <a href="#how-it-works" className="btn btn--ghost">
@@ -406,7 +406,7 @@ function GettingStarted() {
 
   const raw = [
     '# clone and install',
-    'git clone https://github.com/zilikons/swarmLLM',
+    'git clone https://github.com/jpm0112/swarmLLM',
     'cd swarmLLM',
     'uv pip install -e .',
     '',
@@ -441,7 +441,7 @@ function GettingStarted() {
           </div>
           <pre className="code-block__body"><code>
 <span className="c-comment"># clone and install</span>{'\n'}
-<span className="c-cmd">git clone</span> <span className="c-string">https://github.com/zilikons/swarmLLM</span>{'\n'}
+<span className="c-cmd">git clone</span> <span className="c-string">https://github.com/jpm0112/swarmLLM</span>{'\n'}
 <span className="c-cmd">cd</span> swarmLLM{'\n'}
 <span className="c-cmd">uv pip install</span> -e .{'\n'}
 {'\n'}
@@ -514,7 +514,7 @@ function Footer() {
             Contributions, experiments, and feedback are welcome.
           </p>
           <a
-            href="https://github.com/zilikons/swarmLLM"
+            href="https://github.com/jpm0112/swarmLLM"
             target="_blank"
             rel="noreferrer"
             className="btn btn--primary btn--large"
