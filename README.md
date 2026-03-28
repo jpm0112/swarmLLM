@@ -20,13 +20,13 @@ The preferred workflow uses `uv`, but you can fall back to `pip` or `conda` if a
 
 Preferred `uv` setup:
 
-```bash
+``` bash
 uv sync
 ```
 
 Fallback `pip` setup inside an activated Python environment:
 
-```bash
+``` bash
 python -m pip install -U pip
 python -m pip install -e .
 python -m pip install pytest
@@ -34,7 +34,7 @@ python -m pip install pytest
 
 Fallback `conda` setup:
 
-```bash
+``` bash
 conda create -n swarmllm python=3.11
 conda activate swarmllm
 python -m pip install -U pip
@@ -44,7 +44,7 @@ python -m pip install pytest
 
 Run the test suite:
 
-```bash
+``` bash
 uv run pytest
 # or, inside an activated pip or conda environment:
 pytest
@@ -52,7 +52,7 @@ pytest
 
 Run the swarm from the project entry point:
 
-```bash
+``` bash
 uv run swarmllm --help
 uv run swarmllm --backend-profile configs/backends/ollama.local.example.toml --agents 10 --iterations 3
 uv run swarmllm --backend-profile configs/backends/ollama.local.example.toml --agents 10 --iterations 3 --dashboard auto
@@ -63,7 +63,7 @@ swarmllm --backend-profile configs/backends/ollama.local.example.toml --agents 1
 
 You can also run the script module directly:
 
-```bash
+``` bash
 uv run python -m scripts.run --backend-profile configs/backends/vllm.single-node.example.toml --agents 10 --iterations 3
 # or, inside an activated pip or conda environment:
 python -m scripts.run --backend-profile configs/backends/vllm.single-node.example.toml --agents 10 --iterations 3
@@ -73,7 +73,7 @@ python -m scripts.run --backend-profile configs/backends/vllm.single-node.exampl
 
 Swarm runs now support a built-in terminal monitor:
 
-```bash
+``` bash
 uv run swarmllm --backend-profile configs/backends/ollama.local.example.toml --dashboard auto
 ```
 
@@ -124,7 +124,7 @@ Example backend profiles live in `configs/backends/`, and example `vllm serve` Y
 
 ## Repository Layout
 
-```text
+``` text
 swarmLLM/
 ├── AGENTS.md
 ├── README.md
