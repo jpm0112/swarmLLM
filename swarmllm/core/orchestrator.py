@@ -156,14 +156,15 @@ async def run_swarm(config: Config, output_dir: str = "."):
                                      config.llm.coordinator_model, coord_tokens)
         else:
             print("  Coordinator analyzing results...")
-            log_content = log.read()
+            last_iter_content = log.read_iteration(iteration - 1)
+            best_solution = top_solutions[0] if top_solutions else None
             analysis, directions, coord_tokens = await get_next_directions(
                 iteration=iteration,
-                log_content=log_content,
+                last_iteration_content=last_iter_content,
                 config=config,
                 endpoint=router.coordinator_endpoint(),
                 prompt_logger=prompt_logger,
-                top_solutions=top_solutions,
+                best_solution=best_solution,
             )
             if coord_tokens:
                 token_tracker.record("coordinator", iteration, None,

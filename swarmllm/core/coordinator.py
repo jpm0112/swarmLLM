@@ -66,14 +66,14 @@ algorithmic families.
 
 async def get_next_directions(
     iteration: int,
-    log_content: str,
+    last_iteration_content: str,
     config: Config,
     endpoint: LLMEndpoint,
     prompt_logger: PromptLogger | None = None,
-    top_solutions: list[dict] | None = None,
+    best_solution: dict | None = None,
 ) -> tuple[str, list[str], TokenUsage | None]:
     """
-    Ask the coordinator to analyze prior rounds and assign directions.
+    Ask the coordinator to analyze the last iteration and assign new directions.
 
     Returns (analysis_summary, list_of_directions, token_usage).
     """
@@ -81,19 +81,18 @@ async def get_next_directions(
     num_explore = int(num_agents * config.swarm.explore_ratio)
     num_exploit = num_agents - num_explore
 
-    top_section = ""
-    if top_solutions:
-        top_section = "\n## Top Solutions So Far\n\n"
-        for i, solution in enumerate(top_solutions):
-            top_section += f"### #{i + 1} — Score: {solution['score']} — {solution['approach']}\n"
-            top_section += f"```python\n{solution['code']}\n```\n\n"
-        top_section += "Agents may refine, combine, or contrast with these solutions.\n"
+    best_section = ""
+    if best_solution:
+        best_section = "\n## Best Solution So Far\n\n"
+        best_section += f"**Score:** {best_solution['score']} — {best_solution['approach']}\n\n"
+        best_section += f"```python\n{best_solution['code']}\n```\n\n"
+        best_section += "Agents may refine, combine, or contrast with this solution.\n"
 
-    prompt = f"""## Results So Far
+    prompt = f"""## Last Iteration Results
 
-{log_content}
+{last_iteration_content}
 
-{top_section}
+{best_section}
 ---
 
 This is iteration {iteration}. Assign one direction to each agent from 0 to
