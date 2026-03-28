@@ -16,7 +16,7 @@ def schedule(jobs):
     result = execute_agent_code(code, jobs, SandboxConfig(timeout=5))
 
     assert result["success"] is True
-    assert result["schedule"] == [1, 2, 0]
+    assert result["result"] == [1, 2, 0]
     assert result["error"] is None
 
 

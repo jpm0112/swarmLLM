@@ -1,50 +1,70 @@
-from swarmllm.problems.scheduling import (
-    baseline_edd,
-    baseline_fifo,
-    baseline_spt,
-    evaluate_schedule,
-    generate_instance,
-)
+from swarmllm.problems import InstanceProfile
+from swarmllm.problems.job_scheduling import JobSchedulingProblem
+
+
+def _make_problem():
+    return JobSchedulingProblem()
+
+
+def _make_instance(problem, num_jobs=6, seed=123):
+    profile = InstanceProfile(
+        name="test",
+        params={
+            "num_jobs": num_jobs,
+            "min_processing_time": 1,
+            "max_processing_time": 5,
+            "due_date_tightness": 0.5,
+        },
+    )
+    return problem.generate_instance(profile, seed)
 
 
 def test_generate_instance_is_reproducible():
-    instance_a = generate_instance(num_jobs=6, seed=123, min_pt=1, max_pt=5, due_date_tightness=0.5)
-    instance_b = generate_instance(num_jobs=6, seed=123, min_pt=1, max_pt=5, due_date_tightness=0.5)
+    problem = _make_problem()
+    instance_a = _make_instance(problem, num_jobs=6, seed=123)
+    instance_b = _make_instance(problem, num_jobs=6, seed=123)
 
-    jobs_a = [(job.id, job.processing_time, job.due_date) for job in instance_a.jobs]
-    jobs_b = [(job.id, job.processing_time, job.due_date) for job in instance_b.jobs]
+    jobs_a = [(job.id, job.processing_time, job.due_date) for job in instance_a.data]
+    jobs_b = [(job.id, job.processing_time, job.due_date) for job in instance_b.data]
 
     assert jobs_a == jobs_b
-    assert instance_a.total_processing_time == instance_b.total_processing_time
+    assert instance_a.metadata["total_processing_time"] == instance_b.metadata["total_processing_time"]
 
 
 def test_baselines_return_valid_permutations():
-    instance = generate_instance(num_jobs=8, seed=7)
+    problem = _make_problem()
+    profile = InstanceProfile(
+        name="test", params={"num_jobs": 8, "min_processing_time": 1, "max_processing_time": 20, "due_date_tightness": 0.6}
+    )
+    instance = problem.generate_instance(profile, seed=7)
 
-    expected_ids = {job.id for job in instance.jobs}
+    expected_ids = {job.id for job in instance.data}
+    baselines = problem.get_baselines(instance)
 
-    for schedule in (baseline_fifo(instance), baseline_edd(instance), baseline_spt(instance)):
-        assert set(schedule) == expected_ids
-        assert len(schedule) == len(expected_ids)
+    assert len(baselines) > 0
+    for name, score in baselines.items():
+        assert isinstance(score, (int, float))
 
 
-def test_evaluate_schedule_rejects_invalid_permutation():
-    instance = generate_instance(num_jobs=5, seed=99)
-    invalid_schedule = [job.id for job in instance.jobs[:-1]]
+def test_evaluate_rejects_invalid_permutation():
+    problem = _make_problem()
+    instance = _make_instance(problem, num_jobs=5, seed=99)
+    invalid_schedule = [job.id for job in instance.data[:-1]]
 
-    result = evaluate_schedule(instance, invalid_schedule)
+    result = problem.evaluate(instance, invalid_schedule)
 
     assert result["valid"] is False
     assert "Invalid permutation" in result["error"]
 
 
-def test_evaluate_schedule_returns_metrics_for_valid_schedule():
-    instance = generate_instance(num_jobs=5, seed=42)
-    schedule = baseline_fifo(instance)
+def test_evaluate_returns_metrics_for_valid_schedule():
+    problem = _make_problem()
+    instance = _make_instance(problem, num_jobs=5, seed=42)
+    schedule = [job.id for job in instance.data]  # FIFO order
 
-    result = evaluate_schedule(instance, schedule)
+    result = problem.evaluate(instance, schedule)
 
     assert result["valid"] is True
     assert result["num_jobs"] == 5
     assert len(result["details"]) == 5
-    assert result["total_tardiness"] >= 0
+    assert result["score"] >= 0

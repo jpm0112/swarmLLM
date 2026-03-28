@@ -21,7 +21,8 @@ class LLMConfig:
     temperature_coordinator: float = 0.4
     max_tokens_worker: int = 4096
     max_tokens_coordinator: int = 8192
-    request_timeout: int = 300  # seconds
+    request_timeout: int = 300  # seconds for agent calls
+    coordinator_request_timeout: int = 600  # seconds for coordinator (larger prompts)
 
 
 @dataclass
@@ -58,45 +59,15 @@ class SandboxConfig:
 
 
 @dataclass
-class InstanceProfile:
-    """Configuration for a single problem instance."""
-    name: str                       # human-readable label (e.g. "small_tight")
-    num_jobs: int = 20
-    min_processing_time: int = 1
-    max_processing_time: int = 20
-    due_date_tightness: float = 0.6  # lower = tighter deadlines
-
-
-# Default profiles: vary size, deadline pressure, and processing time distribution
-DEFAULT_INSTANCES = [
-    InstanceProfile(
-        name="small_tight",
-        num_jobs=20,
-        min_processing_time=1,
-        max_processing_time=15,
-        due_date_tightness=0.4,     # tight deadlines — forces smart ordering
-    ),
-    InstanceProfile(
-        name="medium_mixed",
-        num_jobs=50,
-        min_processing_time=1,
-        max_processing_time=20,
-        due_date_tightness=0.6,     # moderate deadlines — balanced challenge
-    ),
-    InstanceProfile(
-        name="large_loose",
-        num_jobs=100,
-        min_processing_time=5,
-        max_processing_time=30,
-        due_date_tightness=0.8,     # loose deadlines but long jobs — tests scalability
-    ),
-]
-
-
-@dataclass
 class ProblemConfig:
-    """Configuration for the job scheduling problem."""
-    instances: list[InstanceProfile] = field(default_factory=lambda: list(DEFAULT_INSTANCES))
+    """Configuration for the optimization problem.
+
+    problem_type selects which problem module to load from problems/.
+    instance_profiles is a list of InstanceProfile (from problems/__init__).
+    If empty, the problem's default profiles are used.
+    """
+    problem_type: str = "job_scheduling"
+    instance_profiles: list = field(default_factory=list)  # list of InstanceProfile dicts or objects
     seed: int = 1048596  # fixed seed for reproducibility
 
 

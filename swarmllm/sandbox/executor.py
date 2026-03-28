@@ -22,22 +22,20 @@ from swarmllm.config import SandboxConfig
 
 def execute_agent_code(
     code: str,
-    job_data: list[dict],
+    input_data: list[dict],
     config: SandboxConfig,
+    function_name: str = "schedule",
 ) -> dict:
     """
-    Execute agent-generated scheduling code in a sandboxed subprocess.
+    Execute agent-generated code in a sandboxed subprocess.
 
-    The agent code must define a function:
-        def schedule(jobs: list[dict]) -> list[int]
-
-    Where each job dict has: {"id": int, "processing_time": int, "due_date": int}
-    Returns a list of job IDs representing the schedule order.
+    The agent code must define a function with the given function_name.
+    The function receives input_data (list of dicts) and returns a result.
 
     Returns:
-        dict with keys: success, schedule, error, stdout
+        dict with keys: success, result, error, stdout
     """
-    runner_code = _build_runner(code, job_data, config.blocked_imports)
+    runner_code = _build_runner(code, input_data, config.blocked_imports, function_name)
 
     # Write to temp file and execute in subprocess
     tmp_dir = tempfile.mkdtemp(prefix="swarmllm_")
@@ -74,7 +72,7 @@ def execute_agent_code(
         if result.returncode != 0:
             return {
                 "success": False,
-                "schedule": None,
+                "result": None,
                 "error": result.stderr[-2000:] if result.stderr else "Unknown error",
                 "stdout": result.stdout[-1000:] if result.stdout else "",
             }
@@ -88,14 +86,14 @@ def execute_agent_code(
         except json.JSONDecodeError:
             return {
                 "success": False,
-                "schedule": None,
+                "result": None,
                 "error": f"Could not parse output as JSON. Output: {result.stdout[-500:]}",
                 "stdout": result.stdout[-1000:],
             }
 
         return {
             "success": output.get("success", False),
-            "schedule": output.get("schedule"),
+            "result": output.get("result"),
             "error": output.get("error"),
             "stdout": "\n".join(stdout_lines[:-1])[-1000:],
         }
@@ -103,14 +101,14 @@ def execute_agent_code(
     except subprocess.TimeoutExpired:
         return {
             "success": False,
-            "schedule": None,
+            "result": None,
             "error": f"Execution timed out after {config.timeout} seconds",
             "stdout": "",
         }
     except Exception as e:
         return {
             "success": False,
-            "schedule": None,
+            "result": None,
             "error": f"Sandbox error: {str(e)}",
             "stdout": "",
         }
@@ -133,13 +131,14 @@ def _extract_missing_module(stderr: str) -> str | None:
     return None
 
 
-def _build_runner(agent_code: str, job_data: list[dict], blocked_imports: list[str]) -> str:
+def _build_runner(agent_code: str, input_data: list[dict], blocked_imports: list[str],
+                  function_name: str = "schedule") -> str:
     """Build the full runner script that wraps agent code."""
     blocked_check = ", ".join(f'"{m}"' for m in blocked_imports)
-    job_data_json = json.dumps(job_data)
+    input_data_json = json.dumps(input_data)
 
     # Build the script as parts to avoid indentation issues with agent code.
-    # Agent code runs at top level (defines `schedule` function),
+    # Agent code runs at top level (defines the function),
     # then we call it inside a try/except.
     header = f"""import json
 
@@ -163,20 +162,19 @@ def _restricted_import(name, *args, **kwargs):
 import builtins
 builtins.__import__ = _restricted_import
 
-# Load job data
-jobs = json.loads('{job_data_json}')
+# Load input data
+input_data = json.loads('{input_data_json}')
 """
 
-    footer = """
-# Call the agent's schedule function
+    footer = f"""
+# Call the agent's function
 try:
-    result = schedule(jobs)
+    result = {function_name}(input_data)
     if not isinstance(result, list):
         result = list(result)
     result = [int(x) for x in result]
-    print(json.dumps({"success": True, "schedule": result}))
+    print(json.dumps({{"success": True, "result": result}}))
 except Exception as e:
-    print(json.dumps({"success": False, "error": f"{type(e).__name__}: {str(e)}"}))
-"""
+    print(json.dumps({{"success": False, "error": f"{{type(e).__name__}}: {{str(e)}}"}}))\n"""
 
     return header + "\n# --- Agent code ---\n" + agent_code + "\n" + footer

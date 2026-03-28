@@ -80,7 +80,11 @@ async def chat_completion(
                 async with session.post(
                     url,
                     json=payload,
-                    timeout=aiohttp.ClientTimeout(total=config.request_timeout),
+                    timeout=aiohttp.ClientTimeout(
+                        total=config.coordinator_request_timeout
+                        if model_name == config.coordinator_model
+                        else config.request_timeout
+                    ),
                 ) as resp:
                     if resp.status == 200:
                         data = await resp.json()

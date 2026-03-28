@@ -11,3 +11,6 @@ prompts/
 *.tmp
 lit_review/
 literature_review.json
+problems/Combinatorial Auctions/CA*/
+problems/job_shop_scheduling/instances/
+problems/job_shop_scheduling/instances.json
