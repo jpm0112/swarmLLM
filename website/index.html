@@ -1,90 +1,13 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SwarmLLM</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #0d1117;
-            color: #e6edf3;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-        }
-        .container {
-            text-align: center;
-            max-width: 640px;
-            padding: 2rem;
-        }
-        h1 {
-            font-size: 3rem;
-            margin-bottom: 0.5rem;
-            background: linear-gradient(135deg, #58a6ff, #bc8cff);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        .tagline {
-            font-size: 1.2rem;
-            color: #8b949e;
-            margin-bottom: 2rem;
-        }
-        .description {
-            font-size: 1rem;
-            line-height: 1.7;
-            color: #c9d1d9;
-            margin-bottom: 2.5rem;
-        }
-        .links {
-            display: flex;
-            gap: 1rem;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-        .links a {
-            display: inline-block;
-            padding: 0.7rem 1.5rem;
-            border-radius: 8px;
-            text-decoration: none;
-            font-weight: 600;
-            transition: opacity 0.2s;
-        }
-        .links a:hover { opacity: 0.85; }
-        .btn-primary {
-            background: #58a6ff;
-            color: #0d1117;
-        }
-        .btn-secondary {
-            border: 1px solid #30363d;
-            color: #e6edf3;
-        }
-        footer {
-            position: fixed;
-            bottom: 1.5rem;
-            color: #484f58;
-            font-size: 0.85rem;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>SwarmLLM</h1>
-        <p class="tagline">Multi-Agent LLM Optimization</p>
-        <p class="description">
-            A swarm intelligence framework that coordinates multiple LLM agents
-            to collaboratively solve combinatorial optimization problems.
-            A coordinator assigns diverse research directions while worker agents
-            generate, test, and refine heuristic solutions.
-        </p>
-        <div class="links">
-            <a href="https://github.com/jpm0112/swarmLLM" class="btn-primary">GitHub Repo</a>
-            <a href="https://github.com/jpm0112/swarmLLM#readme" class="btn-secondary">Documentation</a>
-        </div>
-    </div>
-    <footer>Work in progress</footer>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>website</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
 </html>
