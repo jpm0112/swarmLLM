@@ -142,5 +142,8 @@ def load_problem(problem_type: str) -> ProblemBase:
     if problem_type == "job_scheduling":
         from problems.job_scheduling import JobSchedulingProblem
         return JobSchedulingProblem()
+    elif problem_type == "job_shop_scheduling":
+        from problems.job_shop_scheduling import JobShopSchedulingProblem
+        return JobShopSchedulingProblem()
     else:
-        raise ValueError(f"Unknown problem type: {problem_type}. Available: job_scheduling")
+        raise ValueError(f"Unknown problem type: {problem_type}. Available: job_scheduling, job_shop_scheduling")

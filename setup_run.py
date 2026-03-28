@@ -91,7 +91,7 @@ def ask(prompt, default, explanation=""):
 def pick_problem():
     """Let user pick a problem type."""
     # Discover available problems
-    available = ["job_scheduling"]
+    available = ["job_scheduling", "job_shop_scheduling"]
     print("\n  Problem type:")
     print("  ----------------------------------------")
     for i, p in enumerate(available, 1):
@@ -181,9 +181,15 @@ def main():
         "Number of iterations", 5,
         "How many rounds of generate -> evaluate -> coordinate."
     )
+    if problem_type == "job_shop_scheduling":
+        instance_default = "easy,medium,hard"
+        instance_help = ("JSPLIB instances to test on. Use difficulty levels (easy,medium,hard,very_hard) "
+                         "or specific instance names (ft06,ft10,abz7). E.g. easy,medium,hard")
+    else:
+        instance_default = "20,50,100"
+        instance_help = "Problem sizes to test on. Each gets different characteristics (tightness, PT range). E.g. 20,50,100"
     instance_sizes = ask(
-        "Instance sizes (comma-separated)", "20,50,100",
-        "Problem sizes to test on. Each gets different characteristics (tightness, PT range). E.g. 20,50,100"
+        "Instances (comma-separated)", instance_default, instance_help
     )
     explore = ask(
         "Explore ratio (0.0-1.0)", 0.5,
@@ -221,7 +227,7 @@ def main():
     print(f"    Iterations:    {iterations}")
     print(f"    Concurrent:    {concurrent}")
     print(f"    GPUs:          {'2 (dual)' if dual_gpu else '1 (single)'}")
-    print(f"    Instances:     {instance_sizes} jobs")
+    print(f"    Instances:     {instance_sizes}")
     print(f"    Explore ratio: {explore}")
     print(f"    Timeout:       {timeout}s")
     print(f"    Seed:          {seed}")
