@@ -18,3 +18,7 @@ This package holds the swarm control loop: worker-agent execution, coordinator d
 ## Hierarchy
 
 `swarmllm/core` is the top-level application layer inside the package. It calls into `swarmllm.llm`, `swarmllm.problems`, `swarmllm.sandbox`, and `swarmllm.tracking` to run a full swarm iteration.
+
+## Environment Note
+
+Repository command examples prefer `uv`, but the package guidance here also applies when the repo is used from an activated `pip` or `conda` environment. If `uv` is unavailable, run the equivalent `python -m ...` or `pytest` commands directly inside that environment.

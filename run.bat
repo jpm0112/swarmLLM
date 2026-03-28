@@ -22,8 +22,8 @@ if not exist ".venv" (
 call .venv\Scripts\activate.bat
 
 :: Install dependencies
-echo Installing dependencies...
-pip install -r requirements.txt --quiet
+echo Syncing project dependencies...
+uv sync --frozen --quiet
 echo.
 
 :: Run interactive setup + launch

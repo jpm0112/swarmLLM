@@ -1,0 +1,9 @@
+# mlx-lm server configuration
+# Launch with: mlx_lm.server --model <model> [--host ...] [--port ...]
+# These values are used by setup_run.py to seed the launch command.
+
+model: mlx-community/Qwen2.5-Coder-14B-Instruct-8bit
+host: "127.0.0.1"
+port: 8080
+log-level: "INFO"
+max-tokens: 8192

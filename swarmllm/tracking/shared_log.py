@@ -80,6 +80,14 @@ class SharedLog:
             f.write(summary)
             f.write("\n\n---\n\n")
 
+    def read_iteration(self, iteration: int) -> str:
+        """Read only the agent result entries for a specific iteration."""
+        content = self.read()
+        chunks = content.split("\n---\n")
+        target_prefix = f"### Iteration {iteration} —"
+        matching = [chunk for chunk in chunks if target_prefix in chunk]
+        return "\n---\n".join(matching).strip()
+
     def get_best_score(self) -> float | None:
         """Parse log to find the best (lowest) score so far."""
         content = self.read()

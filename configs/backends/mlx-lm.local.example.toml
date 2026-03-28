@@ -1,0 +1,23 @@
+name = "mlx-lm-local"
+kind = "mlx-lm"
+request_timeout = 300
+default_max_concurrent_agents = 4
+
+[coordinator]
+model = "/Users/zilikons/.models/Qwen3.5-27B-MLX"
+temperature = 0.4
+max_tokens = 32000
+
+[worker]
+model = "/Users/zilikons/.models/Qwen3.5-27B-MLX"
+temperature = 1.0
+max_tokens = 5000
+
+[[coordinator_endpoints]]
+label = "mlx-lm-primary"
+base_url = "http://127.0.0.1:8080/v1"
+
+[[worker_endpoints]]
+label = "mlx-lm-primary"
+base_url = "http://127.0.0.1:8000/v1"
+weight = 1
