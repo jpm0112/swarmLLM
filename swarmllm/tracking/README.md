@@ -7,6 +7,8 @@ This package contains observability helpers for swarm runs: shared logs, prompt 
 - Shared markdown log management
 - Prompt and response logging
 - Token usage aggregation and summaries
+- Live telemetry snapshots and event streams
+- Rich TUI rendering for active runs
 - Future run metadata or analytics helpers
 
 ## What Should Not Go Here

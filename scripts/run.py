@@ -50,6 +50,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Comma-separated OpenAI-compatible base URLs. Overrides profile endpoint pools.",
     )
+    parser.add_argument(
+        "--dashboard",
+        choices=["auto", "plain", "tui"],
+        default="auto",
+        help="Run output mode: auto picks the Rich TUI on a TTY and plain logs otherwise.",
+    )
     parser.add_argument("--output-dir", type=str, default=".", help="Directory for output files")
     return parser
 
@@ -127,7 +133,7 @@ def main():
     print(f"  Seed: {config.problem.seed}")
     print()
 
-    asyncio.run(run_swarm(config, args.output_dir))
+    asyncio.run(run_swarm(config, args.output_dir, dashboard_mode=args.dashboard))
 
 
 def _apply_base_url_override(config: Config, base_urls: list[str]) -> None:

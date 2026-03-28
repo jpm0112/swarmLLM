@@ -240,17 +240,18 @@ async def test_get_next_directions_fills_missing_assignments(monkeypatch):
 
     analysis, directions, usage = await get_next_directions(
         iteration=2,
-        log_content="prior results",
+        last_iteration_content="prior results",
         config=config,
         endpoint=endpoint,
         prompt_logger=None,
-        top_solutions=[],
+        best_solution=None,
     )
 
     assert analysis == "Need more diversity."
     assert len(directions) == 3
-    assert directions[0] == "Try EDD with stochastic tie-breaks"
-    assert directions[1] != ""
+    assert directions[0].direction == "Try EDD with stochastic tie-breaks"
+    assert directions[0].mode == "explore"
+    assert directions[1].direction != ""
     assert usage is not None
 
 
@@ -356,7 +357,7 @@ async def test_run_swarm_smoke_uses_resolved_loopback_endpoint(monkeypatch, tmp_
 
     try:
         with override_allow_model_requests(True):
-            await run_swarm(config, output_dir=str(tmp_path))
+            await run_swarm(config, output_dir=str(tmp_path), dashboard_mode="plain")
     finally:
         clear_caches()
         await client.aclose()
@@ -368,3 +369,5 @@ async def test_run_swarm_smoke_uses_resolved_loopback_endpoint(monkeypatch, tmp_
     assert seen["worker"] == 1
     assert seen["chat_hosts"] == ["localhost", "localhost"]
     assert (tmp_path / "results_log.md").exists()
+    assert (tmp_path / "events.jsonl").exists()
+    assert (tmp_path / "live_state.json").exists()

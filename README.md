@@ -55,6 +55,7 @@ Run the swarm from the project entry point:
 ```bash
 uv run swarmllm --help
 uv run swarmllm --backend-profile configs/backends/ollama.local.example.toml --agents 10 --iterations 3
+uv run swarmllm --backend-profile configs/backends/ollama.local.example.toml --agents 10 --iterations 3 --dashboard auto
 # or, inside an activated pip or conda environment:
 swarmllm --help
 swarmllm --backend-profile configs/backends/ollama.local.example.toml --agents 10 --iterations 3
@@ -67,6 +68,25 @@ uv run python -m scripts.run --backend-profile configs/backends/vllm.single-node
 # or, inside an activated pip or conda environment:
 python -m scripts.run --backend-profile configs/backends/vllm.single-node.example.toml --agents 10 --iterations 3
 ```
+
+## Live Monitoring
+
+Swarm runs now support a built-in terminal monitor:
+
+```bash
+uv run swarmllm --backend-profile configs/backends/ollama.local.example.toml --dashboard auto
+```
+
+- `--dashboard auto` uses the Rich TUI when stdout is a TTY and falls back to plain logs otherwise.
+- `--dashboard plain` forces plain terminal output while still writing telemetry files.
+- `--dashboard tui` asks for the Rich TUI explicitly and falls back to plain mode if a TTY is unavailable.
+
+Each run folder now includes:
+
+- `events.jsonl` for append-only lifecycle telemetry
+- `live_state.json` for the latest dashboard snapshot
+- `run.log` for mirrored console output
+- the existing `results_log.md`, `summary.txt`, `token_usage.json`, `prompts/`, `instances/`, and `config.json`
 
 ## Backends
 

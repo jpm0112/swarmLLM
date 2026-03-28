@@ -19,7 +19,8 @@ from swarmllm.llm.schemas import WorkerDraft
 from swarmllm.problems.scheduling import ProblemInstance, evaluate_schedule
 from swarmllm.sandbox.executor import execute_agent_code
 from swarmllm.tracking.prompt_logger import PromptLogger
-from swarmllm.tracking.token_tracker import TokenUsage
+from swarmllm.tracking.telemetry import TelemetrySink
+from swarmllm.tracking.token_tracker import TokenUsage, UsageSnapshot
 
 
 FIX_PROMPT = """\
@@ -71,6 +72,7 @@ async def run_agent(
     iteration: int = 0,
     prompt_logger: PromptLogger | None = None,
     top_solutions: list[dict] | None = None,
+    telemetry: TelemetrySink | None = None,
 ) -> dict:
     """
     Run a single worker agent against all configured problem instances.
@@ -98,10 +100,28 @@ Write a general algorithm and do not hardcode for a specific instance.
     system_prompt = AGENT_SYSTEM_PROMPT.format(timeout=config.sandbox.timeout, pip_packages=pip_list)
     usage = RunUsage()
     llm_time = 0.0
+    endpoint_label = endpoint.label or endpoint.base_url
 
     try:
+        if telemetry:
+            telemetry.set_agent_phase(
+                agent_id,
+                iteration,
+                phase="llm",
+                status="running",
+                retry_count=0,
+                endpoint_label=endpoint_label,
+                direction=direction,
+            )
+            telemetry.emit_event(
+                "agent_llm_started",
+                message=f"Agent {agent_id} requesting initial draft",
+                agent_id=agent_id,
+                iteration=iteration,
+                endpoint_label=endpoint_label,
+            )
         initial_start = time.time()
-        draft_result = await _request_worker_draft(
+        draft_result, call_usage = await _request_worker_draft(
             role="agent",
             agent_id=agent_id,
             iteration=iteration,
@@ -112,7 +132,18 @@ Write a general algorithm and do not hardcode for a specific instance.
             prompt_logger=prompt_logger,
             usage=usage,
         )
-        llm_time += time.time() - initial_start
+        call_duration = time.time() - initial_start
+        llm_time += call_duration
+        if telemetry:
+            telemetry.record_llm_call(
+                role="agent",
+                iteration=iteration,
+                agent_id=agent_id,
+                model=config.llm.agent_model,
+                duration_seconds=call_duration,
+                usage=call_usage,
+                endpoint_label=endpoint_label,
+            )
     except Exception as exc:
         return {
             "agent_id": agent_id,
@@ -140,12 +171,57 @@ Write a general algorithm and do not hardcode for a specific instance.
         {"id": job.id, "processing_time": job.processing_time, "due_date": job.due_date}
         for job in smallest_problem.jobs
     ]
-    pre_error = _validate_generated_code(code, smallest_problem, smallest_jobs, config)
+    if telemetry:
+        telemetry.set_agent_phase(
+            agent_id,
+            iteration,
+            phase="sandbox",
+            status="running",
+            retry_count=0,
+            endpoint_label=endpoint_label,
+            direction=direction,
+        )
+        telemetry.emit_event(
+            "agent_sandbox_started",
+            message=f"Agent {agent_id} validating draft on the smallest instance",
+            agent_id=agent_id,
+            iteration=iteration,
+            stage="precheck",
+        )
+    pre_error = _validate_generated_code(
+        code,
+        smallest_problem,
+        smallest_jobs,
+        config,
+        telemetry=telemetry,
+        agent_id=agent_id,
+        iteration=iteration,
+        process_label=f"agent {agent_id} precheck",
+    )
 
     for retry in range(config.swarm.agent_retries):
         if pre_error is None:
             break
 
+        if telemetry:
+            telemetry.emit_event(
+                "agent_precheck_failed",
+                message=f"Agent {agent_id} precheck failed; requesting retry {retry + 1}",
+                level="warning",
+                agent_id=agent_id,
+                iteration=iteration,
+                retry_count=retry + 1,
+                error=pre_error,
+            )
+            telemetry.set_agent_phase(
+                agent_id,
+                iteration,
+                phase="llm",
+                status="running",
+                retry_count=retry + 1,
+                endpoint_label=endpoint_label,
+                direction=direction,
+            )
         fix_prompt = FIX_PROMPT.format(
             num_jobs=len(smallest_problem.jobs),
             error=pre_error,
@@ -153,7 +229,7 @@ Write a general algorithm and do not hardcode for a specific instance.
         )
         try:
             retry_start = time.time()
-            fix_result = await _request_worker_draft(
+            fix_result, call_usage = await _request_worker_draft(
                 role=f"agent_fix{retry + 1}",
                 agent_id=agent_id,
                 iteration=iteration,
@@ -164,7 +240,18 @@ Write a general algorithm and do not hardcode for a specific instance.
                 prompt_logger=prompt_logger,
                 usage=usage,
             )
-            llm_time += time.time() - retry_start
+            call_duration = time.time() - retry_start
+            llm_time += call_duration
+            if telemetry:
+                telemetry.record_llm_call(
+                    role="agent",
+                    iteration=iteration,
+                    agent_id=agent_id,
+                    model=config.llm.agent_model,
+                    duration_seconds=call_duration,
+                    usage=call_usage,
+                    endpoint_label=endpoint_label,
+                )
         except Exception:
             break
 
@@ -174,20 +261,63 @@ Write a general algorithm and do not hardcode for a specific instance.
         if fixed.notes:
             notes = f"{fixed.notes} (fixed after pre-test retry {retry + 1})"
 
-        pre_error = _validate_generated_code(code, smallest_problem, smallest_jobs, config)
+        if telemetry:
+            telemetry.set_agent_phase(
+                agent_id,
+                iteration,
+                phase="sandbox",
+                status="running",
+                retry_count=retry + 1,
+                endpoint_label=endpoint_label,
+                direction=direction,
+            )
+        pre_error = _validate_generated_code(
+            code,
+            smallest_problem,
+            smallest_jobs,
+            config,
+            telemetry=telemetry,
+            agent_id=agent_id,
+            iteration=iteration,
+            process_label=f"agent {agent_id} precheck",
+        )
 
     exec_start = time.time()
     instance_scores: dict[str, float] = {}
     instance_errors: dict[str, str] = {}
     first_error: str | None = None
 
+    if telemetry:
+        telemetry.set_agent_phase(
+            agent_id,
+            iteration,
+            phase="sandbox",
+            status="running",
+            retry_count=0 if pre_error is None else config.swarm.agent_retries,
+            endpoint_label=endpoint_label,
+            direction=direction,
+        )
+        telemetry.emit_event(
+            "agent_sandbox_started",
+            message=f"Agent {agent_id} evaluating across {len(problems)} instances",
+            agent_id=agent_id,
+            iteration=iteration,
+            stage="benchmark",
+        )
     for inst_name, problem in problems:
         job_data = [
             {"id": job.id, "processing_time": job.processing_time, "due_date": job.due_date}
             for job in problem.jobs
         ]
 
-        exec_result = execute_agent_code(code, job_data, config.sandbox)
+        exec_result = execute_agent_code(
+            code,
+            job_data,
+            config.sandbox,
+            telemetry=telemetry,
+            process_label=f"agent {agent_id} {inst_name}",
+            process_metadata={"agent_id": agent_id, "iteration": iteration, "instance": inst_name},
+        )
         if not exec_result["success"]:
             instance_errors[inst_name] = exec_result["error"]
             if first_error is None:
@@ -269,8 +399,9 @@ async def _request_worker_draft(
     config: Config,
     prompt_logger: PromptLogger | None,
     usage: RunUsage,
-) -> AgentRunResult[WorkerDraft]:
+) -> tuple[AgentRunResult[WorkerDraft], TokenUsage | None]:
     worker_agent = build_worker_agent(config, endpoint, system_prompt)
+    usage_before = UsageSnapshot.capture(usage)
     result = await worker_agent.run(
         prompt,
         usage=usage,
@@ -289,7 +420,8 @@ async def _request_worker_draft(
             output=result.output,
             messages_json=result.all_messages_json(),
         )
-    return result
+    usage_after = UsageSnapshot.capture(usage)
+    return result, TokenUsage.from_usage_delta(usage_before, usage_after)
 
 
 def _validate_generated_code(
@@ -297,9 +429,20 @@ def _validate_generated_code(
     problem: ProblemInstance,
     jobs: list[dict],
     config: Config,
+    telemetry: TelemetrySink | None = None,
+    agent_id: int | None = None,
+    iteration: int = 0,
+    process_label: str | None = None,
 ) -> str | None:
     """Run the smallest-instance validation used before the full benchmark set."""
-    pre_result = execute_agent_code(code, jobs, config.sandbox)
+    pre_result = execute_agent_code(
+        code,
+        jobs,
+        config.sandbox,
+        telemetry=telemetry,
+        process_label=process_label or f"agent {agent_id} precheck",
+        process_metadata={"agent_id": agent_id, "iteration": iteration, "stage": "precheck"},
+    )
     if not pre_result["success"]:
         return pre_result["error"]
 

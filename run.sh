@@ -17,8 +17,8 @@ fi
 source .venv/bin/activate
 
 # Install dependencies
-echo "Installing dependencies..."
-uv pip install -r requirements.txt --quiet
+echo "Syncing project dependencies..."
+uv sync --frozen --quiet
 echo
 
 # Run interactive setup + launch

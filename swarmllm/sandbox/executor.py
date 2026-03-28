@@ -12,18 +12,20 @@ Runs agent code in a subprocess with:
 import subprocess
 import sys
 import json
-import textwrap
 import tempfile
 import os
-from pathlib import Path
 
 from swarmllm.config import SandboxConfig
+from swarmllm.tracking.telemetry import TelemetrySink
 
 
 def execute_agent_code(
     code: str,
     job_data: list[dict],
     config: SandboxConfig,
+    telemetry: TelemetrySink | None = None,
+    process_label: str | None = None,
+    process_metadata: dict | None = None,
 ) -> dict:
     """
     Execute agent-generated scheduling code in a sandboxed subprocess.
@@ -47,28 +49,36 @@ def execute_agent_code(
         with open(tmp_file, "w", encoding="utf-8") as f:
             f.write(runner_code)
 
-        result = subprocess.run(
+        result = _run_subprocess(
             [sys.executable, tmp_file],
-            capture_output=True,
-            text=True,
-            timeout=config.timeout,
             cwd=tmp_dir,
+            timeout=config.timeout,
+            telemetry=telemetry,
+            label=process_label or "sandbox python",
+            metadata=process_metadata,
         )
 
         # Auto-install missing packages and retry once
         if result.returncode != 0 and "ModuleNotFoundError" in (result.stderr or ""):
             pkg = _extract_missing_module(result.stderr)
             if pkg and pkg not in config.blocked_imports:
-                install = subprocess.run(
+                install = _run_subprocess(
                     [sys.executable, "-m", "pip", "install", "--quiet", pkg],
-                    capture_output=True, text=True, timeout=60,
+                    cwd=tmp_dir,
+                    timeout=60,
+                    telemetry=telemetry,
+                    label=f"pip install {pkg}",
+                    metadata={"package": pkg, "stage": "sandbox_install"},
                 )
                 if install.returncode == 0:
                     # Retry
-                    result = subprocess.run(
+                    result = _run_subprocess(
                         [sys.executable, tmp_file],
-                        capture_output=True, text=True,
-                        timeout=config.timeout, cwd=tmp_dir,
+                        cwd=tmp_dir,
+                        timeout=config.timeout,
+                        telemetry=telemetry,
+                        label=process_label or "sandbox python",
+                        metadata=process_metadata,
                     )
 
         if result.returncode != 0:
@@ -131,6 +141,53 @@ def _extract_missing_module(stderr: str) -> str | None:
         # Return top-level package name (e.g., "pulp" from "pulp.core")
         return match.group(1).split(".")[0]
     return None
+
+
+def _run_subprocess(
+    command: list[str],
+    *,
+    cwd: str,
+    timeout: int,
+    telemetry: TelemetrySink | None,
+    label: str,
+    metadata: dict | None = None,
+) -> subprocess.CompletedProcess[str]:
+    """Run a tracked subprocess and keep it visible to the live monitor."""
+    process = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        cwd=cwd,
+    )
+    if telemetry:
+        telemetry.register_process(
+            process.pid,
+            label=label,
+            kind="python",
+            role="sandbox",
+            metadata=metadata or {},
+        )
+    try:
+        stdout, stderr = process.communicate(timeout=timeout)
+        return subprocess.CompletedProcess(
+            args=command,
+            returncode=process.returncode,
+            stdout=stdout,
+            stderr=stderr,
+        )
+    except subprocess.TimeoutExpired as exc:
+        process.kill()
+        stdout, stderr = process.communicate()
+        raise subprocess.TimeoutExpired(
+            cmd=exc.cmd or command,
+            timeout=exc.timeout or timeout,
+            output=stdout,
+            stderr=stderr,
+        ) from exc
+    finally:
+        if telemetry:
+            telemetry.unregister_process(process.pid)
 
 
 def _build_runner(agent_code: str, job_data: list[dict], blocked_imports: list[str]) -> str:

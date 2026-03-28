@@ -619,6 +619,18 @@ def main():
             print(f"ERROR: {exc}")
             sys.exit(1)
 
+    for env_key in [
+        "SWARMLLM_LOCAL_SERVER_PID",
+        "SWARMLLM_LOCAL_SERVER_KIND",
+        "SWARMLLM_LOCAL_SERVER_LOG_PATH",
+    ]:
+        run_env.pop(env_key, None)
+    if server_state.started and server_state.process is not None:
+        run_env["SWARMLLM_LOCAL_SERVER_PID"] = str(server_state.process.pid)
+        run_env["SWARMLLM_LOCAL_SERVER_KIND"] = backend
+        if server_state.log_path:
+            run_env["SWARMLLM_LOCAL_SERVER_LOG_PATH"] = server_state.log_path
+
     cmd = [
         sys.executable,
         os.path.join(os.path.dirname(__file__), "run.py"),

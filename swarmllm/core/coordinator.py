@@ -38,7 +38,7 @@ async def get_initial_directions(
     config: Config,
     endpoint: LLMEndpoint,
     prompt_logger: PromptLogger | None = None,
-) -> tuple[list[str], TokenUsage | None]:
+) -> tuple[list[DirectionAssignment], TokenUsage | None]:
     """Ask the coordinator for initial directions for iteration 1."""
     num_agents = config.swarm.num_agents
     prompt = f"""This is the first iteration. There are no prior results.
@@ -60,8 +60,8 @@ algorithmic families.
         prompt_logger=prompt_logger,
         usage=usage,
     )
-    _, directions = _normalize_round_plan(result.output, num_agents, initial=True)
-    return directions, TokenUsage.from_run_usage(usage)
+    _, assignments = _normalize_round_plan(result.output, num_agents, initial=True)
+    return assignments, TokenUsage.from_run_usage(usage)
 
 
 async def get_next_directions(
@@ -71,7 +71,7 @@ async def get_next_directions(
     endpoint: LLMEndpoint,
     prompt_logger: PromptLogger | None = None,
     best_solution: dict | None = None,
-) -> tuple[str, list[str], TokenUsage | None]:
+) -> tuple[str, list[DirectionAssignment], TokenUsage | None]:
     """
     Ask the coordinator to analyze the last iteration and assign new directions.
 
@@ -117,8 +117,8 @@ Requirements:
         usage=usage,
     )
 
-    analysis, directions = _normalize_round_plan(result.output, num_agents, initial=False)
-    return analysis, directions, TokenUsage.from_run_usage(usage)
+    analysis, assignments = _normalize_round_plan(result.output, num_agents, initial=False)
+    return analysis, assignments, TokenUsage.from_run_usage(usage)
 
 
 async def _request_coordinator_plan(
@@ -156,7 +156,7 @@ def _normalize_round_plan(
     plan: CoordinatorRoundPlan,
     num_agents: int,
     initial: bool,
-) -> tuple[str, list[str]]:
+) -> tuple[str, list[DirectionAssignment]]:
     """Normalize typed coordinator output into the orchestrator's direction list."""
     assignments: dict[int, DirectionAssignment] = {}
     for assignment in plan.directions:
@@ -171,15 +171,21 @@ def _normalize_round_plan(
         "Try a randomized approach with multiple restarts",
     ]
 
-    ordered_directions: list[str] = []
+    ordered_assignments: list[DirectionAssignment] = []
     for agent_id in range(num_agents):
         if agent_id in assignments:
-            ordered_directions.append(assignments[agent_id].direction)
+            ordered_assignments.append(assignments[agent_id])
         else:
-            ordered_directions.append(fallbacks[agent_id % len(fallbacks)])
+            ordered_assignments.append(
+                DirectionAssignment(
+                    agent_id=agent_id,
+                    mode="explore" if initial else "explore",
+                    direction=fallbacks[agent_id % len(fallbacks)],
+                )
+            )
 
     if initial:
         analysis = plan.analysis or "Initial exploration across diverse scheduling strategies."
     else:
         analysis = plan.analysis or "Coordinator returned no analysis; using fallback direction normalization."
-    return analysis, ordered_directions
+    return analysis, ordered_assignments

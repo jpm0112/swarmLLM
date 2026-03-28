@@ -52,7 +52,7 @@ class LLMConfig:
             )
         ]
     )
-    temperature_worker: float = 0.4
+    temperature_worker: float = 1.0
     temperature_coordinator: float = 0.4
     max_tokens_worker: int = 4096
     max_tokens_coordinator: int = 8192
