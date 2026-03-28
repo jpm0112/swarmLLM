@@ -1,0 +1,12 @@
+model: Qwen/Qwen2.5-Coder-14B-Instruct
+served-model-name: qwen2.5-coder-14b
+host: "0.0.0.0"
+port: 8000
+api-key: "token-abc123"
+dtype: auto
+max-model-len: 32768
+gpu-memory-utilization: 0.9
+max-num-seqs: 64
+enable-prefix-caching: true
+tensor-parallel-size: 4
+pipeline-parallel-size: 1

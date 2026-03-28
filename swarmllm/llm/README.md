@@ -1,10 +1,12 @@
 # swarmllm.llm
 
-This package contains the boundary to model providers. Right now it wraps Ollama's OpenAI-compatible chat API.
+This package contains the boundary to model providers. It now targets OpenAI-compatible backends through PydanticAI, with backend profiles for Ollama, vLLM Metal, and vLLM.
 
 ## What Goes Here
 
 - LLM client adapters
+- Backend profile loading and validation
+- Role-aware endpoint routing
 - Retry, timeout, and load-balancing behavior for model calls
 - Backend-specific request and response normalization
 
@@ -15,4 +17,8 @@ This package contains the boundary to model providers. Right now it wraps Ollama
 
 ## Hierarchy
 
-`swarmllm/llm` is an infrastructure layer used by `swarmllm/core`. Future backend integrations should follow the same separation so orchestration code stays backend-agnostic.
+`swarmllm/llm` is an infrastructure layer used by `swarmllm/core`. Future backend integrations should preserve the OpenAI-compatible boundary so orchestration code stays backend-agnostic.
+
+## Environment Note
+
+Repository command examples prefer `uv`, but the package guidance here also applies when the repo is used from an activated `pip` or `conda` environment. If `uv` is unavailable, run the equivalent `python -m ...` or `pytest` commands directly inside that environment.

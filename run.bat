@@ -9,7 +9,7 @@ cd /d "%~dp0"
 :: Create venv if it doesn't exist
 if not exist ".venv" (
     echo Creating virtual environment...
-    python -m venv .venv
+    py -3.10 -m venv .venv
     if errorlevel 1 (
         echo ERROR: Failed to create virtual environment.
         pause
@@ -22,8 +22,8 @@ if not exist ".venv" (
 call .venv\Scripts\activate.bat
 
 :: Install dependencies
-echo Installing dependencies...
-pip install -r requirements.txt --quiet
+echo Syncing project dependencies...
+uv sync --frozen --quiet
 echo.
 
 :: Run interactive setup + launch

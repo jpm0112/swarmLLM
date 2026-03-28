@@ -1,0 +1,16 @@
+Metadata-Version: 2.4
+Name: swarmllm
+Version: 0.1.0
+Summary: Multi-Agent LLM Swarm for Optimization
+Requires-Python: >=3.10
+Requires-Dist: gurobipy>=13.0.1
+Requires-Dist: networkx>=3.4.2
+Requires-Dist: numpy>=1.24.0
+Requires-Dist: psutil>=7.2.2
+Requires-Dist: pydantic>=2
+Requires-Dist: pydantic-ai-slim[openai]>=1.73.0
+Requires-Dist: rich>=14.3.3
+Requires-Dist: scipy>=1.15.3
+Requires-Dist: tomli>=2.4.1
+Provides-Extra: mlx
+Requires-Dist: mlx-lm>=0.31.1; extra == "mlx"

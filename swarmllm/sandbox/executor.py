@@ -12,12 +12,12 @@ Runs agent code in a subprocess with:
 import subprocess
 import sys
 import json
-import textwrap
 import tempfile
 import os
-from pathlib import Path
+import asyncio
 
 from swarmllm.config import SandboxConfig
+from swarmllm.tracking.telemetry import TelemetrySink
 
 
 def execute_agent_code(
@@ -25,12 +25,15 @@ def execute_agent_code(
     input_data: list[dict],
     config: SandboxConfig,
     function_name: str = "schedule",
+    telemetry: TelemetrySink | None = None,
+    process_label: str | None = None,
+    process_metadata: dict | None = None,
 ) -> dict:
     """
     Execute agent-generated code in a sandboxed subprocess.
 
-    The agent code must define a function with the given function_name.
-    The function receives input_data (list of dicts) and returns a result.
+    The agent code must define a function with the given function_name that
+    accepts a list of dicts and returns a result.
 
     Returns:
         dict with keys: success, result, error, stdout
@@ -45,28 +48,36 @@ def execute_agent_code(
         with open(tmp_file, "w", encoding="utf-8") as f:
             f.write(runner_code)
 
-        result = subprocess.run(
+        result = _run_subprocess(
             [sys.executable, tmp_file],
-            capture_output=True,
-            text=True,
-            timeout=config.timeout,
             cwd=tmp_dir,
+            timeout=config.timeout,
+            telemetry=telemetry,
+            label=process_label or "sandbox python",
+            metadata=process_metadata,
         )
 
         # Auto-install missing packages and retry once
         if result.returncode != 0 and "ModuleNotFoundError" in (result.stderr or ""):
             pkg = _extract_missing_module(result.stderr)
             if pkg and pkg not in config.blocked_imports:
-                install = subprocess.run(
+                install = _run_subprocess(
                     [sys.executable, "-m", "pip", "install", "--quiet", pkg],
-                    capture_output=True, text=True, timeout=60,
+                    cwd=tmp_dir,
+                    timeout=60,
+                    telemetry=telemetry,
+                    label=f"pip install {pkg}",
+                    metadata={"package": pkg, "stage": "sandbox_install"},
                 )
                 if install.returncode == 0:
                     # Retry
-                    result = subprocess.run(
+                    result = _run_subprocess(
                         [sys.executable, tmp_file],
-                        capture_output=True, text=True,
-                        timeout=config.timeout, cwd=tmp_dir,
+                        cwd=tmp_dir,
+                        timeout=config.timeout,
+                        telemetry=telemetry,
+                        label=process_label or "sandbox python",
+                        metadata=process_metadata,
                     )
 
         if result.returncode != 0:
@@ -121,6 +132,28 @@ def execute_agent_code(
             pass
 
 
+async def execute_agent_code_async(
+    code: str,
+    input_data: list[dict],
+    config: SandboxConfig,
+    function_name: str = "schedule",
+    telemetry: TelemetrySink | None = None,
+    process_label: str | None = None,
+    process_metadata: dict | None = None,
+) -> dict:
+    """Run sandbox execution without blocking the event loop."""
+    return await asyncio.to_thread(
+        execute_agent_code,
+        code,
+        input_data,
+        config,
+        function_name,
+        telemetry,
+        process_label,
+        process_metadata,
+    )
+
+
 def _extract_missing_module(stderr: str) -> str | None:
     """Extract module name from ModuleNotFoundError traceback."""
     import re
@@ -131,8 +164,57 @@ def _extract_missing_module(stderr: str) -> str | None:
     return None
 
 
+def _run_subprocess(
+    command: list[str],
+    *,
+    cwd: str,
+    timeout: int,
+    telemetry: TelemetrySink | None,
+    label: str,
+    metadata: dict | None = None,
+) -> subprocess.CompletedProcess[str]:
+    """Run a tracked subprocess and keep it visible to the live monitor."""
+    process = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        cwd=cwd,
+    )
+    if telemetry:
+        telemetry.register_process(
+            process.pid,
+            label=label,
+            kind="python",
+            role="sandbox",
+            metadata=metadata or {},
+            command=" ".join(command),
+            cwd=cwd,
+        )
+    try:
+        stdout, stderr = process.communicate(timeout=timeout)
+        return subprocess.CompletedProcess(
+            args=command,
+            returncode=process.returncode,
+            stdout=stdout,
+            stderr=stderr,
+        )
+    except subprocess.TimeoutExpired as exc:
+        process.kill()
+        stdout, stderr = process.communicate()
+        raise subprocess.TimeoutExpired(
+            cmd=exc.cmd or command,
+            timeout=exc.timeout or timeout,
+            output=stdout,
+            stderr=stderr,
+        ) from exc
+    finally:
+        if telemetry:
+            telemetry.unregister_process(process.pid)
+
+
 def _build_runner(agent_code: str, input_data: list[dict], blocked_imports: list[str],
-                  function_name: str = "schedule") -> str:
+                   function_name: str = "schedule") -> str:
     """Build the full runner script that wraps agent code."""
     blocked_check = ", ".join(f'"{m}"' for m in blocked_imports)
     input_data_json = json.dumps(input_data)
