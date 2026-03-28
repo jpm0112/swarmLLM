@@ -22,12 +22,20 @@ class WorkerDraft(BaseModel):
         return value
 
 
+class SourceRef(BaseModel):
+    """A reference to a specific agent result from a previous iteration."""
+
+    agent_id: int = Field(ge=0)
+    iteration: int = Field(ge=1)
+
+
 class DirectionAssignment(BaseModel):
     """A coordinator-assigned research direction for a specific agent."""
 
     agent_id: int = Field(ge=0)
     mode: Literal["explore", "exploit"] = "explore"
     direction: str = Field(min_length=1)
+    source_refs: list[SourceRef] = Field(default_factory=list)
 
     @field_validator("direction", mode="before")
     @classmethod

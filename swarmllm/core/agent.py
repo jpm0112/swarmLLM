@@ -63,6 +63,29 @@ markdown fences, or any prose outside the final structured output.
 """
 
 
+def _build_source_section(source_context: list[dict]) -> str:
+    """Build the exploit context section for the agent prompt."""
+    lines = ["## Prior Work to Build On", ""]
+    lines.append(
+        "The following solutions are provided as context. Refine, combine, or"
+        " improve on these approaches as directed."
+    )
+    for ref in source_context:
+        lines.append("")
+        lines.append(
+            f"### Agent {ref['agent_id']} — Iteration {ref['iteration']}"
+            f" — {ref['approach']}"
+        )
+        if ref.get("notes"):
+            lines.append(f"**Notes:** {ref['notes']}")
+        lines.append("")
+        lines.append("```python")
+        lines.append(ref["code"])
+        lines.append("```")
+    lines.append("")
+    return "\n".join(lines)
+
+
 async def run_agent(
     agent_id: int,
     direction: str,
@@ -71,7 +94,7 @@ async def run_agent(
     endpoint: LLMEndpoint,
     iteration: int = 0,
     prompt_logger: PromptLogger | None = None,
-    top_solutions: list[dict] | None = None,
+    source_context: list[dict] | None = None,
     telemetry: TelemetrySink | None = None,
 ) -> dict:
     """
@@ -80,18 +103,20 @@ async def run_agent(
     Returns a dict with:
         agent_id, direction, approach, code, score, success, error, notes,
         instance_scores, instance_errors, token_usage, llm_time, exec_time
-    """
-    del top_solutions  # Reserved for future exploit-agent prompt tuning.
 
+    source_context: list of prior agent results (agent_id, iteration, code,
+        notes, approach) to inject into the prompt for exploit-mode agents.
+    """
     _, example_problem = problems[0]
     instance_desc = ", ".join(f"{name} ({len(problem.jobs)} jobs)" for name, problem in problems)
+    source_section = _build_source_section(source_context) if source_context else ""
     prompt = f"""{example_problem.to_description()}
 
 Your code will be tested on {len(problems)} diverse instances: {instance_desc}.
 They vary in size, deadline tightness, and processing time ranges.
 Write a general algorithm and do not hardcode for a specific instance.
 
-## Research Direction
+{source_section}## Research Direction
 
 {direction}
 """

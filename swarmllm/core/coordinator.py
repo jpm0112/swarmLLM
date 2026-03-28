@@ -31,6 +31,9 @@ markdown fences, or any prose outside the final structured output.
 Modes:
 - explore: try a meaningfully new idea or underexplored algorithm family
 - exploit: refine or combine the strongest-performing approaches so far
+  For exploit assignments, set source_refs to the specific agent results
+  (each with agent_id and iteration) whose code the agent should build on.
+  Reference 1–2 agents whose approaches are most worth refining or combining.
 """
 
 
@@ -101,7 +104,9 @@ This is iteration {iteration}. Assign one direction to each agent from 0 to
 Requirements:
 - Use exactly {num_explore} explore assignments
 - Use exactly {num_exploit} exploit assignments
-- Exploit assignments should directly improve or hybridize the strongest results
+- Exploit assignments must include source_refs identifying which prior agent
+  results (agent_id + iteration from the last iteration results above) the
+  agent should build on; include 1–2 refs for the most promising approaches
 - Explore assignments should avoid repeating already-tried directions unless they
   are meaningfully reframed
 - Pay attention to behavior across different instance sizes, not just one score
