@@ -269,6 +269,119 @@ def fetch_ollama_model_sizes() -> dict[str, float]:
     return sizes
 
 
+def fetch_cached_hf_models() -> list[str]:
+    """List HuggingFace model IDs cached locally (or in WSL on Windows)."""
+    models: list[str] = []
+    try:
+        if os.name == "nt":
+            result = subprocess.run(
+                ["wsl", "-d", "Ubuntu", "--", "bash", "-c", "ls ~/.cache/huggingface/hub/ 2>/dev/null"],
+                capture_output=True, text=True, timeout=10,
+            )
+        else:
+            cache_dir = os.path.expanduser("~/.cache/huggingface/hub")
+            result = subprocess.run(
+                ["ls", cache_dir],
+                capture_output=True, text=True, timeout=10,
+            )
+        if result.returncode == 0:
+            for entry in result.stdout.strip().split("\n"):
+                entry = entry.strip()
+                if entry.startswith("models--"):
+                    # Convert models--Org--Name to Org/Name
+                    parts = entry[len("models--"):].split("--", 1)
+                    if len(parts) == 2:
+                        models.append(f"{parts[0]}/{parts[1]}")
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        pass
+    return sorted(models)
+
+
+def choose_vllm_models(
+    default_coordinator: str, default_worker: str
+) -> tuple[str, str]:
+    """Pick coordinator/worker models from cached HuggingFace models for vLLM."""
+    cached = fetch_cached_hf_models()
+    if not cached:
+        coordinator = ask(
+            "Coordinator model",
+            default_coordinator,
+            "HuggingFace model ID for the coordinator (reads results, assigns directions).",
+        )
+        worker = ask(
+            "Worker/agent model",
+            default_worker,
+            "HuggingFace model ID for agents (writes optimization code). Can be the same as coordinator.",
+        )
+        return coordinator, worker
+
+    # Add a manual entry option
+    options = cached + ["(enter manually)"]
+
+    print()
+    print("  The COORDINATOR reads all results and assigns research")
+    print("  directions. Bigger model = smarter strategy.")
+    print(f"\n  Coordinator model (cached HuggingFace models):")
+    print("  ----------------------------------------")
+    default_idx = 1
+    for i, m in enumerate(options, 1):
+        if m == default_coordinator:
+            default_idx = i
+        marker = " *" if m == default_coordinator else ""
+        print(f"    {i}) {m}{marker}")
+    print("  ----------------------------------------")
+    while True:
+        choice = input(f"  Pick a number [{default_idx}]: ").strip()
+        if choice == "":
+            coordinator = options[default_idx - 1]
+            break
+        try:
+            idx = int(choice)
+            if 1 <= idx <= len(options):
+                coordinator = options[idx - 1]
+                break
+        except ValueError:
+            pass
+        print("  Invalid choice, try again.")
+    if coordinator == "(enter manually)":
+        coordinator = ask("Coordinator model", default_coordinator)
+    print(f"  -> {coordinator}")
+
+    print()
+    print("  The AGENT model writes optimization code. Runs N times")
+    print("  per iteration, so speed matters. Can be smaller/faster.")
+    print(f"\n  Worker/agent model (cached HuggingFace models):")
+    print("  ----------------------------------------")
+    default_idx = 1
+    for i, m in enumerate(options, 1):
+        if m == default_worker:
+            default_idx = i
+        # Default to same as coordinator if worker default not in list
+        if m == coordinator and default_worker not in cached:
+            default_idx = i
+        marker = " *" if i == default_idx else ""
+        print(f"    {i}) {m}{marker}")
+    print("  ----------------------------------------")
+    while True:
+        choice = input(f"  Pick a number [{default_idx}]: ").strip()
+        if choice == "":
+            worker = options[default_idx - 1]
+            break
+        try:
+            idx = int(choice)
+            if 1 <= idx <= len(options):
+                worker = options[idx - 1]
+                break
+        except ValueError:
+            pass
+        print("  Invalid choice, try again.")
+    if worker == "(enter manually)":
+        worker = ask("Worker/agent model", default_worker)
+    print(f"  -> {worker}")
+
+    return coordinator, worker
+
+
 def estimate_parallel(model_size_gb: float, vram_gb: float = 24) -> int:
     """Estimate max parallel requests based on model size and VRAM.
 
@@ -420,6 +533,8 @@ def build_vllm_serve_command(executable: str, config_values: dict[str, Any]) -> 
         command.append("--enable-prefix-caching")
     if config_values.get("enable-auto-tool-choice"):
         command.append("--enable-auto-tool-choice")
+    # Always add --trust-remote-code for community/fine-tuned models
+    command.append("--trust-remote-code")
     return command
 
 
@@ -722,15 +837,8 @@ def main():
             print(f"    Estimated ~{parallel_gpu0} parallel slots (assuming {GPU_0_VRAM} GB VRAM)")
 
     elif backend in {"vllm", "vllm-metal", "mlx-lm"}:
-        coordinator_model = ask(
-            "Coordinator model",
-            coordinator_model,
-            "HuggingFace model ID for the coordinator (reads results, assigns directions).",
-        )
-        worker_model = ask(
-            "Worker/agent model",
-            worker_model,
-            "HuggingFace model ID for agents (writes optimization code). Can be the same as coordinator.",
+        coordinator_model, worker_model = choose_vllm_models(
+            coordinator_model, worker_model,
         )
 
     concurrent = ask(
