@@ -31,7 +31,7 @@ Example of well-formatted code output (unrelated problem):
 approach: "Find the two numbers that sum to target using a hash map"
 code:
 def two_sum(nums, target):
-    seen = {}
+    seen = {{}}
     for i, num in enumerate(nums):
         complement = target - num
         if complement in seen:

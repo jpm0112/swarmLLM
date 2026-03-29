@@ -44,7 +44,7 @@ APPROACH: Find the two numbers that sum to target using a hash map
 
 ```python
 def two_sum(nums, target):
-    seen = {}
+    seen = {{}}
     for i, num in enumerate(nums):
         complement = target - num
         if complement in seen:
