@@ -98,7 +98,12 @@ def _get_http_client(base_url: str, api_key: str, timeout_seconds: int) -> httpx
                 httpx.AsyncHTTPTransport(trust_env=False)
             )
         _HTTP_CLIENT_CACHE[cache_key] = httpx.AsyncClient(
-            timeout=httpx.Timeout(timeout_seconds),
+            timeout=httpx.Timeout(
+                connect=30.0,
+                read=None,
+                write=30.0,
+                pool=30.0,
+            ),
             trust_env=not is_loopback_base_url(base_url),
             transport=transport,
         )
@@ -129,10 +134,16 @@ class _OllamaFixTransport(httpx.AsyncBaseTransport):
                         patched = True
                 if patched:
                     new_content = json.dumps(body).encode("utf-8")
+                    # Rebuild headers with corrected Content-Length
+                    patched_headers = {
+                        k: v for k, v in request.headers.items()
+                        if k.lower() != "content-length"
+                    }
+                    patched_headers["content-length"] = str(len(new_content))
                     request = httpx.Request(
                         method=request.method,
                         url=request.url,
-                        headers=request.headers,
+                        headers=patched_headers,
                         content=new_content,
                     )
             except (json.JSONDecodeError, KeyError, TypeError):

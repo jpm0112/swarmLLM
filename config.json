@@ -1,26 +1,26 @@
 {
   "llm": {
-    "backend_kind": "ollama",
-    "backend_profile_path": "configs/backends/ollama.local.example.toml",
-    "backend_profile_name": "ollama-local",
-    "coordinator_model": "qwen2.5-coder:14b",
-    "agent_model": "qwen2.5-coder:14b",
+    "backend_kind": "vllm",
+    "backend_profile_path": "configs/backends/vllm.single-node.example.toml",
+    "backend_profile_name": "vllm-single-node",
+    "coordinator_model": "Qwen/Qwen2.5-Coder-7B-Instruct",
+    "agent_model": "Qwen/Qwen2.5-Coder-7B-Instruct",
     "coordinator_endpoints": [
       {
-        "base_url": "http://127.0.0.1:11434/v1",
+        "base_url": "http://127.0.0.1:8000/v1",
         "api_key_env": null,
-        "api_key": "ollama",
+        "api_key": "token-abc123",
         "weight": 1,
-        "label": "ollama-primary"
+        "label": "vllm-primary"
       }
     ],
     "worker_endpoints": [
       {
-        "base_url": "http://127.0.0.1:11434/v1",
+        "base_url": "http://127.0.0.1:8000/v1",
         "api_key_env": null,
-        "api_key": "ollama",
+        "api_key": "token-abc123",
         "weight": 1,
-        "label": "ollama-primary"
+        "label": "vllm-primary"
       }
     ],
     "temperature_worker": 0.4,
@@ -34,7 +34,7 @@
     "num_agents": 1,
     "num_iterations": 1,
     "explore_ratio": 0.5,
-    "max_concurrent_agents": 5,
+    "max_concurrent_agents": 12,
     "agent_retries": 0
   },
   "sandbox": {

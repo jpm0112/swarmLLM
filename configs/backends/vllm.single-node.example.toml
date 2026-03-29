@@ -4,12 +4,12 @@ request_timeout = 300
 default_max_concurrent_agents = 12
 
 [coordinator]
-model = "qwen2.5-coder-14b"
+model = "Qwen/Qwen2.5-Coder-7B-Instruct"
 temperature = 0.4
 max_tokens = 8192
 
 [worker]
-model = "qwen2.5-coder-14b"
+model = "Qwen/Qwen2.5-Coder-7B-Instruct"
 temperature = 1.0
 max_tokens = 4096
 

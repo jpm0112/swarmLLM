@@ -73,7 +73,7 @@ def supported_backends_for_platform(system_name: str, machine: str) -> list[str]
     system_name = system_name.lower()
     machine = machine.lower()
     if system_name == "windows":
-        return ["ollama", "ollama-cloud"]
+        return ["ollama", "ollama-cloud", "vllm"]
     if system_name == "darwin":
         backends = ["ollama", "ollama-cloud"]
         if machine in {"arm64", "aarch64"}:
@@ -411,6 +411,7 @@ def build_vllm_serve_command(executable: str, config_values: dict[str, Any]) -> 
         "max-num-seqs",
         "tensor-parallel-size",
         "pipeline-parallel-size",
+        "tool-call-parser",
     ]
     for key in flag_order:
         if key in config_values:
@@ -566,6 +567,14 @@ def stop_local_server(process: subprocess.Popen[str]) -> None:
         if os.name != "nt":
             os.killpg(process.pid, signal.SIGTERM)
         else:
+            # On Windows with WSL, also kill the vllm process inside WSL
+            try:
+                subprocess.run(
+                    ["wsl", "-d", "Ubuntu", "--", "pkill", "-f", "vllm serve"],
+                    timeout=5, capture_output=True,
+                )
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                pass
             process.terminate()
         process.wait(timeout=10)
     except (ProcessLookupError, subprocess.TimeoutExpired):
@@ -608,9 +617,24 @@ def ensure_local_vllm_server(
         spec = build_local_mlx_lm_server_spec(profile_path, output_dir, env)
     else:
         spec = build_local_vllm_server_spec(backend, profile_path, output_dir, env)
+
+    launch_command = spec.command
+    # On Windows, vLLM must run inside WSL2 (requires CUDA/Linux).
+    # Wrap the command so it activates the venv and launches inside WSL.
+    if os.name == "nt" and backend in {"vllm"}:
+        vllm_venv = "~/vllm-env"
+        # Build the inner shell command that runs inside WSL
+        inner_parts = [
+            f"source {vllm_venv}/bin/activate",
+            "CUDA_VISIBLE_DEVICES=0 CUDA_DEVICE_ORDER=PCI_BUS_ID "
+            + " ".join(spec.command),
+        ]
+        inner_cmd = " && ".join(inner_parts)
+        launch_command = ["wsl", "-d", "Ubuntu", "--", "bash", "-lc", inner_cmd]
+
     log_handle = open(spec.log_path, "w", encoding="utf-8")
     process = subprocess.Popen(
-        spec.command,
+        launch_command,
         stdout=log_handle,
         stderr=subprocess.STDOUT,
         text=True,
@@ -619,11 +643,13 @@ def ensure_local_vllm_server(
     )
     log_handle.close()
 
-    print(f"  Starting {backend} server...")
-    print(f"    Command: {' '.join(spec.command)}")
+    print(f"  Starting {backend} server (via WSL2)..." if os.name == "nt" else f"  Starting {backend} server...")
+    print(f"    Command: {' '.join(launch_command)}")
     print(f"    Log:     {spec.log_path}")
 
-    if not wait_for_backend_ready(spec.base_url, spec.api_key, timeout_seconds=90, process=process):
+    # vLLM on WSL needs extra time to load model weights and compile CUDA graphs
+    startup_timeout = 300 if backend in {"vllm", "vllm-metal"} else 90
+    if not wait_for_backend_ready(spec.base_url, spec.api_key, timeout_seconds=startup_timeout, process=process):
         print(f"ERROR: {backend} server did not become ready at {spec.base_url}")
         tail = tail_file(spec.log_path)
         if tail:
