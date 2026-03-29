@@ -1,5 +1,5 @@
 # SwarmLLM
-
+![Logo](./docs/assets/image.png)
 SwarmLLM is a research prototype for running a coordinator-guided swarm of LLM agents against optimization problems. The goal is to let many worker agents explore solution ideas in parallel, log what they tried, and let a coordinator LLM steer the next round based on what worked, what failed, and what still looks unexplored.
 
 Today the repo is focused on a job scheduling benchmark: agents generate Python scheduling heuristics, the sandbox executes them, and the orchestrator scores them across multiple problem instances with different sizes and deadline tightness.
