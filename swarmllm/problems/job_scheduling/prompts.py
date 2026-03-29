@@ -19,6 +19,7 @@ Rules:
 5. You may import pip packages already available in the sandbox: {pip_packages}
 6. Dangerous system/network modules are blocked
 7. Your code has a {timeout}s time limit
+8. Write proper multi-line Python code using newlines and indentation. Never use semicolons to join statements on one line. Always include a complete implementation — never return stubs, ellipsis (...), or placeholder comments.
 
 Return structured output with:
 - approach: a short one-line description of the algorithm
