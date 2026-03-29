@@ -1294,19 +1294,33 @@ class RunTelemetry:
             key = self._read_key()
             if key:
                 self.handle_input_key(key)
-            else:
-                time.sleep(0.05)
 
     def _read_key(self) -> str:
         if os.name == "nt":  # pragma: no cover - Windows-only branch
             try:
                 import msvcrt
-            except ImportError:
+                import ctypes
+                kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+            except (ImportError, AttributeError):
+                return ""
+            # Use Win32 WaitForSingleObject on stdin handle for reliable
+            # key detection — msvcrt.kbhit() can miss keys when Rich is
+            # writing to the alternate screen buffer.
+            STD_INPUT_HANDLE = -10
+            WAIT_OBJECT_0 = 0
+            handle = kernel32.GetStdHandle(STD_INPUT_HANDLE)
+            result = kernel32.WaitForSingleObject(handle, 100)  # 100ms timeout
+            if result != WAIT_OBJECT_0:
                 return ""
             if not msvcrt.kbhit():
+                # Signalled but no character (e.g. window resize event) — flush it
+                try:
+                    kernel32.FlushConsoleInputBuffer(handle)
+                except Exception:
+                    pass
                 return ""
             ch = msvcrt.getwch()
-            if ch in {"\x00", "\xe0"} and msvcrt.kbhit():
+            if ch in {"\x00", "\xe0"}:
                 special = msvcrt.getwch()
                 return {"H": "up", "P": "down"}.get(special, "")
             if ch == "\t":
