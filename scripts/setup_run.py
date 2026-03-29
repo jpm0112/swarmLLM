@@ -418,6 +418,8 @@ def build_vllm_serve_command(executable: str, config_values: dict[str, Any]) -> 
             command.extend([f"--{key}", str(config_values[key])])
     if config_values.get("enable-prefix-caching"):
         command.append("--enable-prefix-caching")
+    if config_values.get("enable-auto-tool-choice"):
+        command.append("--enable-auto-tool-choice")
     return command
 
 
@@ -433,30 +435,23 @@ def build_local_vllm_server_spec(
     base_url = endpoint.base_url
     host, port = parse_base_url(base_url)
     api_key_env = endpoint.api_key_env
-    default_config_path = DEFAULT_VLLM_CONFIG_BY_BACKEND[backend]
-    config_path = ask(
-        "vLLM config path",
-        default_config_path,
-        "Use a simple YAML template to seed the launch command.",
-    )
+
+    config_path = DEFAULT_VLLM_CONFIG_BY_BACKEND[backend]
     if not os.path.exists(config_path):
         raise FileNotFoundError(f"vLLM config not found: {config_path}")
 
-    executable = ask(
-        "vLLM executable",
-        DEFAULT_VLLM_EXECUTABLE_BY_BACKEND[backend],
-        "Path to the `vllm` executable that should launch the local server.",
-    )
+    executable = DEFAULT_VLLM_EXECUTABLE_BY_BACKEND[backend]
 
     config_values = parse_flat_yaml(config_path)
     config_values["served-model-name"] = profile.coordinator.model
     config_values["host"] = host
     config_values["port"] = port
 
-    api_key_default = env.get(api_key_env, str(config_values.get("api-key", "token-abc123"))) if api_key_env else str(
+    api_key = env.get(api_key_env, str(config_values.get("api-key", "token-abc123"))) if api_key_env else str(
         config_values.get("api-key", "token-abc123")
     )
-    api_key = prompt_backend_api_key(api_key_env, api_key_default, env)
+    if api_key_env:
+        env[api_key_env] = api_key
     config_values["api-key"] = api_key
 
     command = build_vllm_serve_command(executable, config_values)
@@ -600,11 +595,10 @@ def ensure_local_vllm_server(
         print("  Remote backend profile detected; launcher will not auto-start a local server.")
         return LocalServerState(process=None, log_path=None, started=False)
 
-    if endpoint.api_key_env and endpoint.api_key_env not in env:
-        default_api_key = endpoint.api_key or "token-abc123"
-        api_key = prompt_backend_api_key(endpoint.api_key_env, default_api_key, env)
-    else:
-        api_key = resolve_api_key(endpoint, profile.kind)
+    api_key = resolve_api_key(endpoint, profile.kind)
+    if endpoint.api_key_env:
+        env.setdefault(endpoint.api_key_env, api_key or "token-abc123")
+        api_key = env[endpoint.api_key_env]
 
     try:
         models = fetch_available_models(base_url, api_key)
@@ -863,6 +857,17 @@ def main():
             print()
             print("  Stopping local model server...")
             stop_local_server(server_state.process)
+
+    # Print the summary so it's visible in the terminal after the run
+    summary_path = os.path.join(output_dir, "summary.txt")
+    if os.path.exists(summary_path):
+        print()
+        with open(summary_path, "r", encoding="utf-8") as f:
+            print(f.read())
+        print(f"  Output folder: {output_dir}")
+        print()
+
+    input("  Press Enter to exit...")
 
 
 if __name__ == "__main__":
