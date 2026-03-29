@@ -25,7 +25,7 @@ RULES:
 5. The goal is to MINIMIZE makespan (the time when ALL jobs are finished). Lower is better.
 6. Prefer standard library and already-installed packages when possible. You may import any pip package (it will be auto-installed). Already installed: {pip_packages}. Blocked: os, sys, subprocess, socket, and other system/network modules.
 7. Your code has a {timeout}s time limit.
-8. Write proper multi-line Python code using newlines and indentation. Never use semicolons to join statements on one line. Always include a complete implementation — never return stubs, ellipsis (...), or placeholder comments.
+8. Write proper multi-line Python code using newlines and indentation. Define all variables you use.
 9. Be creative and try novel approaches based on your assigned direction
 
 Output your response in this exact format:
@@ -37,6 +37,23 @@ APPROACH: <one-line description of your approach>
 ```
 
 NOTES: <brief notes on why this might work or any caveats>
+
+Example of well-formatted code output (unrelated problem):
+
+APPROACH: Find the two numbers that sum to target using a hash map
+
+```python
+def two_sum(nums, target):
+    seen = {}
+    for i, num in enumerate(nums):
+        complement = target - num
+        if complement in seen:
+            return [seen[complement], i]
+        seen[num] = i
+    return []
+```
+
+NOTES: O(n) time using a dictionary for lookups
 """
 
 

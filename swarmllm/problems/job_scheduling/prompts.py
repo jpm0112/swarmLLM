@@ -19,12 +19,26 @@ Rules:
 5. You may import pip packages already available in the sandbox: {pip_packages}
 6. Dangerous system/network modules are blocked
 7. Your code has a {timeout}s time limit
-8. Write proper multi-line Python code using newlines and indentation. Never use semicolons to join statements on one line. Always include a complete implementation — never return stubs, ellipsis (...), or placeholder comments.
+8. Write proper multi-line Python code using newlines and indentation. Define all variables you use.
 
 Return structured output with:
 - approach: a short one-line description of the algorithm
 - code: the complete Python source defining schedule(jobs)
 - notes: brief rationale, caveats, or what you changed on a retry
+
+Example of well-formatted code output (unrelated problem):
+
+approach: "Find the two numbers that sum to target using a hash map"
+code:
+def two_sum(nums, target):
+    seen = {}
+    for i, num in enumerate(nums):
+        complement = target - num
+        if complement in seen:
+            return [seen[complement], i]
+        seen[num] = i
+    return []
+notes: "O(n) time using a dictionary for lookups"
 
 Return only the structured result. Do not emit XML tags, <tools> wrappers,
 markdown fences, or any prose outside the final structured output.
