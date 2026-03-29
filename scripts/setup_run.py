@@ -428,6 +428,7 @@ def build_local_vllm_server_spec(
     profile_path: str,
     output_dir: str,
     env: dict[str, str],
+    model_override: str | None = None,
 ) -> LocalServerSpec:
     """Build the launch command and environment for a local vLLM-style backend."""
     profile = load_backend_profile(profile_path)
@@ -443,7 +444,11 @@ def build_local_vllm_server_spec(
     executable = DEFAULT_VLLM_EXECUTABLE_BY_BACKEND[backend]
 
     config_values = parse_flat_yaml(config_path)
-    config_values["served-model-name"] = profile.coordinator.model
+    if model_override:
+        config_values["model"] = model_override
+        config_values["served-model-name"] = model_override
+    else:
+        config_values["served-model-name"] = profile.coordinator.model
     config_values["host"] = host
     config_values["port"] = port
 
@@ -585,6 +590,7 @@ def ensure_local_vllm_server(
     profile_path: str,
     output_dir: str,
     env: dict[str, str],
+    model_override: str | None = None,
 ) -> LocalServerState:
     """Start a local vLLM-style backend when the profile points at loopback and nothing is listening."""
     profile = load_backend_profile(profile_path)
@@ -610,7 +616,8 @@ def ensure_local_vllm_server(
     if backend == "mlx-lm":
         spec = build_local_mlx_lm_server_spec(profile_path, output_dir, env)
     else:
-        spec = build_local_vllm_server_spec(backend, profile_path, output_dir, env)
+        spec = build_local_vllm_server_spec(backend, profile_path, output_dir, env,
+                                            model_override=model_override)
 
     launch_command = spec.command
     # On Windows, vLLM must run inside WSL2 (requires CUDA/Linux).
@@ -714,6 +721,18 @@ def main():
             print(f"\n  Agent model ~{agent_size:.1f} GB")
             print(f"    Estimated ~{parallel_gpu0} parallel slots (assuming {GPU_0_VRAM} GB VRAM)")
 
+    elif backend in {"vllm", "vllm-metal", "mlx-lm"}:
+        coordinator_model = ask(
+            "Coordinator model",
+            coordinator_model,
+            "HuggingFace model ID for the coordinator (reads results, assigns directions).",
+        )
+        worker_model = ask(
+            "Worker/agent model",
+            worker_model,
+            "HuggingFace model ID for agents (writes optimization code). Can be the same as coordinator.",
+        )
+
     concurrent = ask(
         "Max concurrent agents",
         str(recommended_parallel),
@@ -803,7 +822,10 @@ def main():
     server_state = LocalServerState(process=None, log_path=None, started=False)
     if backend in {"vllm-metal", "vllm", "mlx-lm"}:
         try:
-            server_state = ensure_local_vllm_server(backend, profile_path, output_dir, run_env)
+            server_state = ensure_local_vllm_server(
+                backend, profile_path, output_dir, run_env,
+                model_override=worker_model,
+            )
         except (FileNotFoundError, RuntimeError, ValueError) as exc:
             print(f"ERROR: {exc}")
             sys.exit(1)
