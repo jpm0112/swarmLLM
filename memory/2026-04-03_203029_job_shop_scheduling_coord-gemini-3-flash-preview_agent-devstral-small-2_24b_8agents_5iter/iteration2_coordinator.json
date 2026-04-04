@@ -1,0 +1,79 @@
+{
+  "record_type": "coordinator_decision",
+  "iteration": 2,
+  "analysis": "The first iteration saw a universal failure across all agents, primarily due to a 'TypeError' involving list-to-int conversion and execution timeouts. The 'TypeError' suggests a systemic issue in how agents are processing the input 'jobs' structure or formatting the output 'start' times. Despite the failures, the conceptual approaches remain sound: CP-SAT (Agent 0), Tabu Search with N5 (Agent 2), and Shifting Bottleneck (Agent 7) are industry-standard for JSP. Agent 3's Giffler-Thompson approach is also a strong foundation but suffered from efficiency issues. The next iteration must focus on robust implementation of these algorithms, ensuring the data structures (specifically the 'start' time injection) are handled correctly and efficiently to avoid timeouts on larger instances like ft20.",
+  "assignments": [
+    {
+      "agent_id": 0,
+      "mode": "exploit",
+      "direction": "Refine the OR-Tools CP-SAT model. Instead of parsing machine indices from variable names (which caused TypeErrors), use a dictionary to map (job_id, op_id) to interval variables. Ensure the 'start' values are extracted as integers and correctly assigned back to the original dictionary structure.",
+      "source_refs": [
+        {
+          "agent_id": 0,
+          "iteration": 1
+        }
+      ]
+    },
+    {
+      "agent_id": 1,
+      "mode": "explore",
+      "direction": "Implement a Large Neighborhood Search (LNS). Use a simple greedy heuristic to find an initial solution, then iteratively 'destroy' a portion of the schedule (e.g., remove all operations for 2-3 machines or 2-3 jobs) and 'repair' it using a focused CP-SAT sub-solver with a short time limit.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 2,
+      "mode": "exploit",
+      "direction": "Fix the Tabu Search implementation. Ensure the Disjunctive Graph representation is used to correctly identify the critical path. The N5 neighborhood should only swap adjacent operations on the critical path that belong to the same machine. Ensure the 'start' time recomputation (forward pass) is efficient.",
+      "source_refs": [
+        {
+          "agent_id": 2,
+          "iteration": 1
+        }
+      ]
+    },
+    {
+      "agent_id": 3,
+      "mode": "exploit",
+      "direction": "Re-implement the Giffler-Thompson (GT) algorithm to generate 'active' schedules. To avoid timeouts, optimize the candidate selection process. Use a priority rule like 'Most Work Remaining' (MWKR) to break ties in the GT algorithm. Generate multiple schedules and return the one with the minimum makespan.",
+      "source_refs": [
+        {
+          "agent_id": 3,
+          "iteration": 1
+        },
+        {
+          "agent_id": 6,
+          "iteration": 1
+        }
+      ]
+    },
+    {
+      "agent_id": 4,
+      "mode": "explore",
+      "direction": "Implement Late Acceptance Hill Climbing (LAHC). This metaheuristic is often more robust than Simulated Annealing for JSP. Use a permutation-based representation (sequence of job IDs) and a move operator that swaps two positions in the permutation. Use a simple forward-pass builder to convert permutations to semi-active schedules.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 5,
+      "mode": "explore",
+      "direction": "Implement a GRASP (Greedy Randomized Adaptive Search Procedure). In the construction phase, use a randomized version of the Shortest Processing Time (SPT) rule. Follow this with a local search phase using a simple 2-opt or swap move on machine sequences.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 6,
+      "mode": "explore",
+      "direction": "Implement a Disjunctive Graph-based approach using the Longest Path algorithm (Topological Sort) to calculate makespan. Use this to drive a simple Hill Climbing search that explores the neighborhood of machine-sequence permutations.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 7,
+      "mode": "exploit",
+      "direction": "Refine the Shifting Bottleneck Heuristic. The single-machine subproblem (1|rj|Cmax) should be solved using Schrage's algorithm or a simple branch-and-bound if the number of operations per machine is small. Ensure that the release times (rj) are correctly updated based on the precedence constraints of the jobs.",
+      "source_refs": [
+        {
+          "agent_id": 7,
+          "iteration": 1
+        }
+      ]
+    }
+  ]
+}

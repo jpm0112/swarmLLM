@@ -1,0 +1,43 @@
+{
+  "record_type": "coordinator_decision",
+  "iteration": 1,
+  "analysis": null,
+  "assignments": [
+    {
+      "agent_id": 0,
+      "mode": "explore",
+      "direction": "Genetic Algorithm with tournament selection",
+      "source_refs": []
+    },
+    {
+      "agent_id": 1,
+      "mode": "explore",
+      "direction": "Simulated Annealing with random restarts",
+      "source_refs": []
+    },
+    {
+      "agent_id": 2,
+      "mode": "explore",
+      "direction": "Ant Colony Optimization with pheromone evaporation",
+      "source_refs": []
+    },
+    {
+      "agent_id": 3,
+      "mode": "explore",
+      "direction": "Tabu Search with dynamic tabu list length",
+      "source_refs": []
+    },
+    {
+      "agent_id": 4,
+      "mode": "explore",
+      "direction": "Particle Swarm Optimization with inertia weight adjustment",
+      "source_refs": []
+    },
+    {
+      "agent_id": 5,
+      "mode": "explore",
+      "direction": "Evolutionary Strategy with mutation rate adaptation",
+      "source_refs": []
+    }
+  ]
+}

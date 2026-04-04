@@ -1,16 +1,16 @@
 name = "ollama-cloud"
 kind = "ollama"
 request_timeout = 300
-default_max_concurrent_agents = 2
+default_max_concurrent_agents = 4
 
 [coordinator]
-model = "qwen2.5-coder:14b"
-temperature = 0.4
+model = "devstral-small-2:24b"
+temperature = 0.7
 max_tokens = 8192
 
 [worker]
-model = "qwen2.5-coder:14b"
-temperature = 1.0
+model = "devstral-small-2:24b"
+temperature = 0.2
 max_tokens = 4096
 
 [[coordinator_endpoints]]

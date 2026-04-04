@@ -1,0 +1,21 @@
+[
+  {
+    "record_type": "agent_attempt",
+    "iteration": 1,
+    "agent_id": 0,
+    "mode": "explore",
+    "direction": "Try a novel heuristic approach not yet explored",
+    "source_refs": [],
+    "approach": "Use a Genetic Algorithm to optimize the Job Shop Scheduling Problem by evolving schedules over generations.",
+    "code": "# Implementation of Genetic Algorithm for Job Shop Scheduling\nimport random\nfrom typing import List, Dict\n\ndef init_population(jobs: List[List[Dict]], population_size: int) -> List[List[List[Dict]]]:\n    population = []\n    for _ in range(population_size):\n        individual = jobs.copy()\n        random.shuffle(individual)\n        population.append(individual)\n    return population\n\ndef calculate_makespan(schedule: List[List[Dict]]) -> int:\n    machine_times, makespan = {}, 0\n    for job in schedule:\n        start_time = 0\n        for operation in job:\n            if operation['machine'] not in machine_times:\n                machine_times[operation['machine']] = 0\n            start_time = max(start_time, machine_times[operation['machine']])\n            operation['start'] = start_time\n            makespan = max(makespan, start_time + operation['duration'])\n            machine_times[operation['machine']] = start_time + operation['duration']\n    return makespan\n\ndef crossover(parent1: List[List[Dict]], parent2: List[List[Dict]]) -> List[List[Dict]]:\n    crossover_point = random.randint(0, len(parent1) - 1)\n    child = [parent1[i] for i in range(crossover_point)]\n    seen_jobs = set(id(job) for job in child)\n    for job in parent2:\n        if id(job) not in seen_jobs:\n            child.append(job)\n    return child\n\ndef mutate(individual: List[List[Dict]], mutation_rate: float) -> List[List[Dict]]:\n    if random.random() < mutation_rate:\n        idx1, idx2 = random.sample(range(len(individual)), 2)\n        individual[idx1], individual[idx2] = individual[idx2], individual[idx1]\n    return individual\n\ndef genetic_algorithm_solve(jobs: List[List[Dict]], population_size: int, generations: int, mutation_rate: float) -> List[List[Dict]]:\n    population = init_population(jobs, population_size)\n    for _ in range(generations):\n        population.sort(key=lambda schedule: calculate_makespan(schedule))\n        parents = population[:population_size//2]\n        for i in range(0, len(parents), 2):\n            if i + 1 < len(parents):\n                child1, child2 = crossover(parents[i], parents[i+1]), crossover(parents[i+1], parents[i])\n                child1, child2 = mutate(child1, mutation_rate), mutate(child2, mutation_rate)\n                population.extend([child1, child2])\n        while len(population) < population_size:\n            population.append(random.choice(parents).copy())\n    return min(population, key=calculate_makespan)\n\ndef solve(jobs: List[List[Dict]]) -> List[List[Dict]]:\n    return genetic_algorithm_solve(jobs, 100, 500, 0.02)",
+    "score": null,
+    "success": false,
+    "error": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'list'",
+    "failure_reason": "type error \u2014 int() argument must be a string, a bytes-like object or a real number, not 'list'",
+    "notes": "Fixed the indentation in all functions to ensure proper block structure. This should resolve the original `IndentationError` encountered in the code. (fixed after pre-test retry 1)",
+    "instance_scores": {},
+    "instance_errors": {
+      "easy_ft06": "TypeError: int() argument must be a string, a bytes-like object or a real number, not 'list'"
+    }
+  }
+]

@@ -1,0 +1,14 @@
+[
+  {"name": "ft06", "jobs": 6, "machines": 6, "optimum": 55},
+  {"name": "la01", "jobs": 10, "machines": 5, "optimum": 666},
+  {"name": "la02", "jobs": 10, "machines": 5, "optimum": 655},
+  {"name": "ft10", "jobs": 10, "machines": 10, "optimum": 930},
+  {"name": "la16", "jobs": 10, "machines": 10, "optimum": 945},
+  {"name": "orb01", "jobs": 10, "machines": 10, "optimum": 1059},
+  {"name": "ft20", "jobs": 20, "machines": 5, "optimum": 1165},
+  {"name": "abz7", "jobs": 20, "machines": 15, "optimum": 656},
+  {"name": "la21", "jobs": 15, "machines": 10, "optimum": 1046},
+  {"name": "swv01", "jobs": 20, "machines": 10, "optimum": 1407},
+  {"name": "ta01", "jobs": 15, "machines": 15, "optimum": 1231},
+  {"name": "yn1", "jobs": 20, "machines": 20, "optimum": 885}
+]

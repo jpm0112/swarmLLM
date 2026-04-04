@@ -1,0 +1,147 @@
+[
+  {
+    "record_type": "agent_attempt",
+    "iteration": 2,
+    "agent_id": 0,
+    "mode": "explore",
+    "direction": "Implement a genetic algorithm with a custom crossover operator tailored to the job scheduling problem, incorporating historical tardiness patterns into the selection process.",
+    "source_refs": [],
+    "approach": "Use simulated annealing to find a near-optimal schedule",
+    "code": "from typing import List, Dict; import random; from math import exp; def simulated_annealing(jobs: List[Dict[str, int]], max_iter: int = 1000) -> List[int]: initial_schedule = [job['id'] for job in jobs]; current_cost = total_tardiness(initial_schedule, jobs); temperature = 1000; cooling_rate = 0.99; best_schedule = initial_schedule; for _ in range(max_iter): new_schedule = mutate_schedule(best_schedule); new_cost = total_tardiness(new_schedule, jobs); delta_cost = new_cost - current_cost; if delta_cost < 0 or random.random() < exp(delta_cost / temperature): best_schedule = new_schedule; current_cost = new_cost; temperature *= cooling_rate; return best_schedule;",
+    "score": null,
+    "success": false,
+    "error": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_3_jprc4s\\agent_run.py\", line 27\n    from typing import List, Dict; import random; from math import exp; def simulated_annealing(jobs: List[Dict[str, int]], max_iter: int = 1000) -> List[int]: initial_schedule = [job['id'] for job in jobs]; current_cost = total_tardiness(initial_schedule, jobs); temperature = 1000; cooling_rate = 0.99; best_schedule = initial_schedule; for _ in range(max_iter): new_schedule = mutate_schedule(best_schedule); new_cost = total_tardiness(new_schedule, jobs); delta_cost = new_cost - current_cost; if delta_cost < 0 or random.random() < exp(delta_cost / temperature): best_schedule = new_schedule; current_cost = new_cost; temperature *= cooling_rate; return best_schedule;\n                                                                        ^^^\nSyntaxError: invalid syntax\n",
+    "failure_reason": "syntax error \u2014 invalid Python syntax: invalid syntax",
+    "notes": "Simulated annealing is used as a heuristic method to avoid local optima. This introduces randomness and gradually reduces the acceptance probability of worse solutions to ensure global search. (fixed after pre-test retry 1)",
+    "instance_scores": {},
+    "instance_errors": {
+      "20jobs_t0.4": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_3_jprc4s\\agent_run.py\", line 27\n    from typing import List, Dict; import random; from math import exp; def simulated_annealing(jobs: List[Dict[str, int]], max_iter: int = 1000) -> List[int]: initial_schedule = [job['id'] for job in jobs]; current_cost = total_tardiness(initial_schedule, jobs); temperature = 1000; cooling_rate = 0.99; best_schedule = initial_schedule; for _ in range(max_iter): new_schedule = mutate_schedule(best_schedule); new_cost = total_tardiness(new_schedule, jobs); delta_cost = new_cost - current_cost; if delta_cost < 0 or random.random() < exp(delta_cost / temperature): best_schedule = new_schedule; current_cost = new_cost; temperature *= cooling_rate; return best_schedule;\n                                                                        ^^^\nSyntaxError: invalid syntax\n",
+      "50jobs_t0.6": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_24731hw8\\agent_run.py\", line 27\n    from typing import List, Dict; import random; from math import exp; def simulated_annealing(jobs: List[Dict[str, int]], max_iter: int = 1000) -> List[int]: initial_schedule = [job['id'] for job in jobs]; current_cost = total_tardiness(initial_schedule, jobs); temperature = 1000; cooling_rate = 0.99; best_schedule = initial_schedule; for _ in range(max_iter): new_schedule = mutate_schedule(best_schedule); new_cost = total_tardiness(new_schedule, jobs); delta_cost = new_cost - current_cost; if delta_cost < 0 or random.random() < exp(delta_cost / temperature): best_schedule = new_schedule; current_cost = new_cost; temperature *= cooling_rate; return best_schedule;\n                                                                        ^^^\nSyntaxError: invalid syntax\n",
+      "100jobs_t0.8": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_7ssglqtn\\agent_run.py\", line 27\n    from typing import List, Dict; import random; from math import exp; def simulated_annealing(jobs: List[Dict[str, int]], max_iter: int = 1000) -> List[int]: initial_schedule = [job['id'] for job in jobs]; current_cost = total_tardiness(initial_schedule, jobs); temperature = 1000; cooling_rate = 0.99; best_schedule = initial_schedule; for _ in range(max_iter): new_schedule = mutate_schedule(best_schedule); new_cost = total_tardiness(new_schedule, jobs); delta_cost = new_cost - current_cost; if delta_cost < 0 or random.random() < exp(delta_cost / temperature): best_schedule = new_schedule; current_cost = new_cost; temperature *= cooling_rate; return best_schedule;\n                                                                        ^^^\nSyntaxError: invalid syntax\n"
+    }
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 2,
+    "agent_id": 1,
+    "mode": "explore",
+    "direction": "Apply a memetic algorithm that integrates local search techniques with evolutionary strategies to enhance the search process for optimal schedules.",
+    "source_refs": [],
+    "approach": "Failed to get LLM response",
+    "code": "",
+    "score": null,
+    "success": false,
+    "error": "LLM error (UnexpectedModelBehavior): Model token limit (4096) exceeded before any response was generated. Increase the `max_tokens` model setting, or simplify the prompt to result in a shorter response that will fit within the limit.",
+    "failure_reason": "LLM unreachable \u2014 could not get a response from the model",
+    "notes": "",
+    "instance_scores": {},
+    "instance_errors": {}
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 2,
+    "agent_id": 2,
+    "mode": "explore",
+    "direction": "Utilize a variable neighborhood descent method to explore different neighborhoods of solutions and identify promising regions for improvement.",
+    "source_refs": [],
+    "approach": "Variable Neighborhood Descent (VND) algorithm for job scheduling",
+    "code": "schedule(jobs: list[dict]) -> list[int]: return vnd_scheduling_algorithm(jobs)",
+    "score": null,
+    "success": false,
+    "error": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_z2686oa2\\agent_run.py\", line 27\n    schedule(jobs: list[dict]) -> list[int]: return vnd_scheduling_algorithm(jobs)\n                 ^\nSyntaxError: invalid syntax\n",
+    "failure_reason": "syntax error \u2014 invalid Python syntax: invalid syntax",
+    "notes": "Uses VND to explore different solution neighborhoods and iteratively improves the schedule",
+    "instance_scores": {},
+    "instance_errors": {
+      "20jobs_t0.4": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_z2686oa2\\agent_run.py\", line 27\n    schedule(jobs: list[dict]) -> list[int]: return vnd_scheduling_algorithm(jobs)\n                 ^\nSyntaxError: invalid syntax\n",
+      "50jobs_t0.6": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_vnw0zw4z\\agent_run.py\", line 27\n    schedule(jobs: list[dict]) -> list[int]: return vnd_scheduling_algorithm(jobs)\n                 ^\nSyntaxError: invalid syntax\n",
+      "100jobs_t0.8": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_e9rb6n_3\\agent_run.py\", line 27\n    schedule(jobs: list[dict]) -> list[int]: return vnd_scheduling_algorithm(jobs)\n                 ^\nSyntaxError: invalid syntax\n"
+    }
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 2,
+    "agent_id": 3,
+    "mode": "exploit",
+    "direction": "Refine the Particle Swarm Optimization approach by adjusting the learning factors and inertia weight parameters to achieve faster convergence and better solution quality.",
+    "source_refs": [
+      {
+        "agent_id": 0,
+        "iteration": 1
+      },
+      {
+        "agent_id": 3,
+        "iteration": 1
+      }
+    ],
+    "approach": "Minimize total tardiness using a heuristic that prioritizes jobs with shorter processing times first, then considers due dates to balance early and late completions.",
+    "code": "from itertools import permutations; def schedule(jobs): return next(iter([perm for perm in permutations(range(len(jobs))) if all(perm.index(job['id']) + job['processing_time'] <= job['due_date'] for job in jobs)]) or [None])",
+    "score": null,
+    "success": false,
+    "error": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_ql34m4s0\\agent_run.py\", line 27\n    from itertools import permutations; def schedule(jobs): return next(iter([perm for perm in permutations(range(len(jobs))) if all(perm.index(job['id']) + job['processing_time'] <= job['due_date'] for job in jobs)]) or [None])\n                                        ^^^\nSyntaxError: invalid syntax\n",
+    "failure_reason": "syntax error \u2014 invalid Python syntax: invalid syntax",
+    "notes": "This uses itertools.permutations to generate all possible orders and filters based on total tardiness constraint. (fixed after pre-test retry 1)",
+    "instance_scores": {},
+    "instance_errors": {
+      "20jobs_t0.4": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_ql34m4s0\\agent_run.py\", line 27\n    from itertools import permutations; def schedule(jobs): return next(iter([perm for perm in permutations(range(len(jobs))) if all(perm.index(job['id']) + job['processing_time'] <= job['due_date'] for job in jobs)]) or [None])\n                                        ^^^\nSyntaxError: invalid syntax\n",
+      "50jobs_t0.6": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_uahjzbqz\\agent_run.py\", line 27\n    from itertools import permutations; def schedule(jobs): return next(iter([perm for perm in permutations(range(len(jobs))) if all(perm.index(job['id']) + job['processing_time'] <= job['due_date'] for job in jobs)]) or [None])\n                                        ^^^\nSyntaxError: invalid syntax\n",
+      "100jobs_t0.8": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_7gve32ta\\agent_run.py\", line 27\n    from itertools import permutations; def schedule(jobs): return next(iter([perm for perm in permutations(range(len(jobs))) if all(perm.index(job['id']) + job['processing_time'] <= job['due_date'] for job in jobs)]) or [None])\n                                        ^^^\nSyntaxError: invalid syntax\n"
+    }
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 2,
+    "agent_id": 4,
+    "mode": "exploit",
+    "direction": "Enhance the Differential Evolution algorithm with a more sophisticated crossover strategy that specifically targets the constraints of the job scheduling problem.",
+    "source_refs": [
+      {
+        "agent_id": 4,
+        "iteration": 1
+      },
+      {
+        "agent_id": 0,
+        "iteration": 1
+      }
+    ],
+    "approach": "Failed to get LLM response",
+    "code": "",
+    "score": null,
+    "success": false,
+    "error": "LLM error (UnexpectedModelBehavior): Model token limit (4096) exceeded before any response was generated. Increase the `max_tokens` model setting, or simplify the prompt to result in a shorter response that will fit within the limit.",
+    "failure_reason": "LLM unreachable \u2014 could not get a response from the model",
+    "notes": "",
+    "instance_scores": {},
+    "instance_errors": {}
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 2,
+    "agent_id": 5,
+    "mode": "exploit",
+    "direction": "Combine Tabu Search with a local search heuristic that uses a combination of nearest neighbor and 2-opt moves to find near-optimal schedules.",
+    "source_refs": [
+      {
+        "agent_id": 5,
+        "iteration": 1
+      },
+      {
+        "agent_id": 3,
+        "iteration": 1
+      }
+    ],
+    "approach": "Sort jobs by due date and processing time, then greedily assign jobs with dynamic start times and check for tardiness",
+    "code": "from typing import List, Dict, Tuple from bisect import bisect import heapq class SchedulingAttempt: def __init__(self, jobs: List[Dict[str, int]]) -> None: self.jobs = jobs self.sorted_jobs = sorted(jobs, key=lambda x: (x['due_date'], x['processing_time'])) self.current_job_id = 0 self.schedule = [] self.start_times = {} self.tardiness = 0 def schedule(self) -> List[int]: for _ in range(len(self.sorted_jobs)): start_time = sum(job['processing_time'] for job in self.sorted_jobs[:self.current_job_id+1]) end_time = start_time + self.sorted_jobs[self.current_job_id]['processing_time'] if end_time >= self.sorted_jobs[self.current_job_id]['due_date']: next_job_index = bisect.bisect_right([job['due_date'] for job in self.sorted_jobs[self.current_job_id+1:]], end_time) next_job_id = self.current_job_id + next_job_index + 1 self.current_job_id = next_job_id else: self.current_job_id += 1 self.schedule.append(self.current_job_id) self.check_tardiness() return self.schedule def check_tardiness(self) -> None: for job_id in range(len(self.sorted_jobs)): if self.start_times[job_id] + self.sorted_jobs[job_id]['processing_time'] > self.sorted_jobs[job_id]['due_date']: self.tardiness += self.sorted_jobs[job_id]['processing_time'] - (self.start_times[job_id] + self.sorted_jobs[job_id]['processing_time']) return def get_schedule(self) -> List[int]: return self.schedule def get_tardiness(self) -> int: return self.tardiness @staticmethod def run(scheduling_attempt: SchedulingAttempt) -> Dict[str, any]: scheduling_attempt.schedule() tardiness = scheduling_attempt.get_tardiness() return {'schedule': scheduling_attempt.get_schedule(), 'tardiness': tardiness} jobs = [{",
+    "score": null,
+    "success": false,
+    "error": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm__b62za2y\\agent_run.py\", line 27\n    self) -> None: for job_id in range(len(self.sorted_jobs)): if self.start_times[job_id] + self.sorted_jobs[job_id]['processing_time'] > self.sorted_jobs[job_id]['due_date']: self.tardiness += self.sorted_jobs[job_id]['processing_time'] - (self.start_times[job_id] + self.sorted_jobs[job_id]['processing_time']) return def get_schedule(self) -> List[int]: return self.schedule def get_tardiness(self) -> int: return self.tardiness @staticmethod def run(scheduling_attempt: SchedulingAttempt) -> Dict[str, any]: scheduling_attempt.schedule() tardiness = scheduling_attempt.get_tardiness() return {'schedule': scheduling_attempt.get_schedule(), 'tardiness': tardiness} jobs = [{\n                                         ^^^^\nSyntaxError: invalid syntax\n",
+    "failure_reason": "syntax error \u2014 invalid Python syntax: invalid syntax",
+    "notes": "This approach sorts jobs by their due dates and processing times, and uses a greedy method to place jobs into the schedule. After placing each job, it checks if the end time of the job plus its processing time exceeds the due date. If so, it finds the next job with the earliest due date that can fit without exceeding the due date. This ensures minimal total tardiness.",
+    "instance_scores": {},
+    "instance_errors": {
+      "20jobs_t0.4": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm__b62za2y\\agent_run.py\", line 27\n    self) -> None: for job_id in range(len(self.sorted_jobs)): if self.start_times[job_id] + self.sorted_jobs[job_id]['processing_time'] > self.sorted_jobs[job_id]['due_date']: self.tardiness += self.sorted_jobs[job_id]['processing_time'] - (self.start_times[job_id] + self.sorted_jobs[job_id]['processing_time']) return def get_schedule(self) -> List[int]: return self.schedule def get_tardiness(self) -> int: return self.tardiness @staticmethod def run(scheduling_attempt: SchedulingAttempt) -> Dict[str, any]: scheduling_attempt.schedule() tardiness = scheduling_attempt.get_tardiness() return {'schedule': scheduling_attempt.get_schedule(), 'tardiness': tardiness} jobs = [{\n                                         ^^^^\nSyntaxError: invalid syntax\n",
+      "50jobs_t0.6": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_clthwls9\\agent_run.py\", line 27\n    self) -> None: for job_id in range(len(self.sorted_jobs)): if self.start_times[job_id] + self.sorted_jobs[job_id]['processing_time'] > self.sorted_jobs[job_id]['due_date']: self.tardiness += self.sorted_jobs[job_id]['processing_time'] - (self.start_times[job_id] + self.sorted_jobs[job_id]['processing_time']) return def get_schedule(self) -> List[int]: return self.schedule def get_tardiness(self) -> int: return self.tardiness @staticmethod def run(scheduling_attempt: SchedulingAttempt) -> Dict[str, any]: scheduling_attempt.schedule() tardiness = scheduling_attempt.get_tardiness() return {'schedule': scheduling_attempt.get_schedule(), 'tardiness': tardiness} jobs = [{\n                                         ^^^^\nSyntaxError: invalid syntax\n",
+      "100jobs_t0.8": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_3n8znhkh\\agent_run.py\", line 27\n    self) -> None: for job_id in range(len(self.sorted_jobs)): if self.start_times[job_id] + self.sorted_jobs[job_id]['processing_time'] > self.sorted_jobs[job_id]['due_date']: self.tardiness += self.sorted_jobs[job_id]['processing_time'] - (self.start_times[job_id] + self.sorted_jobs[job_id]['processing_time']) return def get_schedule(self) -> List[int]: return self.schedule def get_tardiness(self) -> int: return self.tardiness @staticmethod def run(scheduling_attempt: SchedulingAttempt) -> Dict[str, any]: scheduling_attempt.schedule() tardiness = scheduling_attempt.get_tardiness() return {'schedule': scheduling_attempt.get_schedule(), 'tardiness': tardiness} jobs = [{\n                                         ^^^^\nSyntaxError: invalid syntax\n"
+    }
+  }
+]

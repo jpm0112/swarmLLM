@@ -61,6 +61,8 @@ def build_parser() -> argparse.ArgumentParser:
         default="auto",
         help="Run output mode: auto picks the Rich TUI on a TTY and plain logs otherwise.",
     )
+    parser.add_argument("--socrates", type=str, default=None, choices=["yes", "no"],
+                        help="Enable Socrates knowledge agent (default: yes)")
     parser.add_argument("--output-dir", type=str, default=".", help="Directory for output files")
     return parser
 
@@ -100,6 +102,8 @@ def build_config_from_args(args: argparse.Namespace) -> Config:
         config.sandbox.timeout = args.timeout
     if args.agent_retries is not None:
         config.swarm.agent_retries = args.agent_retries
+    if args.socrates is not None:
+        config.swarm.enable_socrates = args.socrates == "yes"
     if args.base_urls is not None:
         _apply_base_url_override(config, [url.strip() for url in args.base_urls.split(",") if url.strip()])
     return config

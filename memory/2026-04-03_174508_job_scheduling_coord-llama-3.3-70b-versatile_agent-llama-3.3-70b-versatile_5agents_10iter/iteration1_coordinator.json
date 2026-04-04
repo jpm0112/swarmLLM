@@ -1,0 +1,37 @@
+{
+  "record_type": "coordinator_decision",
+  "iteration": 1,
+  "analysis": null,
+  "assignments": [
+    {
+      "agent_id": 0,
+      "mode": "explore",
+      "direction": "Investigate the application of genetic algorithms to the job scheduling problem, focusing on minimizing total tardiness",
+      "source_refs": []
+    },
+    {
+      "agent_id": 1,
+      "mode": "explore",
+      "direction": "Explore the use of ant colony optimization for job scheduling, analyzing the impact of different pheromone update rules",
+      "source_refs": []
+    },
+    {
+      "agent_id": 2,
+      "mode": "explore",
+      "direction": "Develop a simulated annealing approach for the job scheduling problem, examining the effects of various cooling schedules",
+      "source_refs": []
+    },
+    {
+      "agent_id": 3,
+      "mode": "explore",
+      "direction": "Apply a constraint programming framework to the job scheduling problem, investigating the use of different constraint propagation techniques",
+      "source_refs": []
+    },
+    {
+      "agent_id": 4,
+      "mode": "explore",
+      "direction": "Investigate the use of particle swarm optimization for job scheduling, analyzing the impact of different neighborhood topologies",
+      "source_refs": []
+    }
+  ]
+}

@@ -1,0 +1,83 @@
+{
+  "record_type": "coordinator_decision",
+  "iteration": 5,
+  "analysis": "Iteration 4 saw significant progress with Iterated Local Search (ILS) and Variable Neighborhood Descent (VND) emerging as the strongest framework (Agent 0). Late Acceptance Hill Climbing (LAHC) and Variable Neighborhood Search (VNS) also performed well, but all successful agents are currently limited by inefficient neighborhood evaluations; Agent 0's 'delta evaluation' was a placeholder, and Agent 5's insertion heuristic is computationally expensive for 100-job instances. The primary bottleneck is the 120-second limit on larger instances, which caused timeouts for more complex strategies like Large Neighborhood Search and Tabu Search. Genetic and Differential Evolution approaches failed due to permutation validity errors. The next phase must focus on true delta evaluation to increase search throughput and targeted neighborhood pruning using 'critical job' logic.",
+  "assignments": [
+    {
+      "agent_id": 0,
+      "mode": "exploit",
+      "direction": "Refine the ILS-VND approach by implementing a mathematically rigorous delta evaluation for swap and insertion moves. When swapping jobs at positions i and j (i < j), only the completion times of jobs from index i to j change. Use this to update tardiness in O(j-i) time rather than O(n), allowing for significantly more iterations within the time budget.",
+      "source_refs": [
+        {
+          "agent_id": 0,
+          "iteration": 4
+        }
+      ]
+    },
+    {
+      "agent_id": 1,
+      "mode": "exploit",
+      "direction": "Combine the Ruin-and-Recreate diversification from Agent 2 with the construction logic from Agent 5. Instead of re-inserting jobs using a simple MDD sort, use the 'Iterated Greedy' insertion method where each removed job is tested in every possible position of the partial schedule to find the local minimum tardiness. Ensure a time-check is included to handle the 100-job instance.",
+      "source_refs": [
+        {
+          "agent_id": 2,
+          "iteration": 4
+        },
+        {
+          "agent_id": 5,
+          "iteration": 4
+        }
+      ]
+    },
+    {
+      "agent_id": 2,
+      "mode": "exploit",
+      "direction": "Enhance the VND framework by incorporating the 'Critical Job' focus. Restrict the swap and insertion neighborhoods to only involve jobs that are currently tardy or are immediate neighbors of tardy jobs. This pruning should allow the search to focus on moves that directly impact the objective function, improving performance on the 100-job instance.",
+      "source_refs": [
+        {
+          "agent_id": 0,
+          "iteration": 4
+        },
+        {
+          "agent_id": 2,
+          "iteration": 4
+        }
+      ]
+    },
+    {
+      "agent_id": 3,
+      "mode": "exploit",
+      "direction": "Upgrade the Late Acceptance Hill Climbing (LAHC) metaheuristic to use multiple neighborhood structures (Swap, Insertion, and 2-opt) similar to VND. Maintain the late-acceptance history to allow for uphill moves, but cycle through neighborhoods to escape local optima more effectively than a single-neighborhood search.",
+      "source_refs": [
+        {
+          "agent_id": 3,
+          "iteration": 4
+        }
+      ]
+    },
+    {
+      "agent_id": 4,
+      "mode": "explore",
+      "direction": "Explore a Beam Search algorithm for schedule construction. Unlike greedy heuristics that pick one job at a time, Beam Search maintains a 'width' (B) of the most promising partial schedules. Use MDD or a look-ahead tardiness estimate as the evaluation function to prune the search tree. This provides a middle ground between simple heuristics and exhaustive search.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 5,
+      "mode": "explore",
+      "direction": "Explore Ant Colony Optimization (ACO) specifically designed for the Traveling Salesman Problem (TSP) style permutations. Use a pheromone matrix where tau(i, j) represents the desirability of placing job i at position j or immediately after job k. Combine this with an MDD-based visibility heuristic to construct solutions.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 6,
+      "mode": "explore",
+      "direction": "Explore the use of Ejection Chains (a derivative of Tabu Search). An ejection chain move starts by moving one job, which 'kicks' another job out of its position, which then must be inserted elsewhere, potentially triggering a chain of moves. This allows for complex, multi-step transitions that simple swaps cannot achieve.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 7,
+      "mode": "explore",
+      "direction": "Explore Path Relinking as a diversification strategy. Maintain a small elite set of high-quality, diverse solutions. Generate a new solution by starting at one elite solution and performing a sequence of moves (the 'path') that transforms it into another elite solution, evaluating intermediate schedules along the way.",
+      "source_refs": []
+    }
+  ]
+}

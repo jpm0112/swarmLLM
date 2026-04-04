@@ -1,0 +1,75 @@
+{
+  "record_type": "coordinator_decision",
+  "iteration": 3,
+  "analysis": "All agents in the previous iteration failed with a consistent TypeError, suggesting a systemic issue in how start times were handled or how the final list structure was returned. Despite the failures, the underlying strategies\u2014CP-SAT, Tabu Search with critical path moves, and Shifting Bottleneck\u2014remain the most theoretically sound for JSP. This iteration will focus on fixing the implementation details of these strong methods while introducing population-based and block-aware metaheuristics to broaden the search.",
+  "assignments": [
+    {
+      "agent_id": 0,
+      "mode": "exploit",
+      "direction": "Refine the OR-Tools CP-SAT model. Use a robust dictionary-based mapping for interval and start variables. Ensure all start times are explicitly cast to integers using int(solver.Value(x)) before returning. Implement a strict horizon calculation (sum of all durations) to avoid potential overflow or logic errors in AddMaxEquality.",
+      "source_refs": [
+        {
+          "agent_id": 0,
+          "iteration": 2
+        }
+      ]
+    },
+    {
+      "agent_id": 1,
+      "mode": "explore",
+      "direction": "Implement a Genetic Algorithm (GA) using a 'Permutation with Repetition' encoding (each job ID appears M times in the chromosome). Use the Giffler-Thompson algorithm as a decoder to transform these permutations into 'active' schedules, which are guaranteed to contain the optimal solution.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 2,
+      "mode": "exploit",
+      "direction": "Fix the Tabu Search implementation. Re-verify the Disjunctive Graph construction and the critical path calculation using NetworkX. Implement the N5 neighborhood (swapping only the first and last pairs of operations in a critical block on the same machine). Ensure the forward pass for start-time recomputation is isolated and returns clean integer values.",
+      "source_refs": [
+        {
+          "agent_id": 2,
+          "iteration": 2
+        }
+      ]
+    },
+    {
+      "agent_id": 3,
+      "mode": "explore",
+      "direction": "Implement Simulated Annealing (SA) specifically targeting 'Critical Blocks'. Identify sequences of operations on the same machine that lie on the critical path. Use the Nowicki-Smutnicki neighborhood (swapping the first two or last two operations of a block) to ensure moves have a high probability of reducing the makespan.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 4,
+      "mode": "exploit",
+      "direction": "Refine the Late Acceptance Hill Climbing (LAHC) approach. Use a more robust permutation-to-schedule builder that handles machine availability and job precedence strictly. Ensure the history array is initialized correctly and that the returned schedule is a deep copy of the best found, with all 'start' values verified as integers.",
+      "source_refs": [
+        {
+          "agent_id": 4,
+          "iteration": 2
+        }
+      ]
+    },
+    {
+      "agent_id": 5,
+      "mode": "explore",
+      "direction": "Implement a Multi-Priority Rule Ensemble. Generate schedules using several rules: SPT (Shortest Processing Time), LPT (Longest Processing Time), MWKR (Most Work Remaining), and MOPNR (Most Operations Remaining). For each, use a randomized tie-breaker to generate a pool of candidates, then apply a simple 'Sifting' local search to the best one.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 6,
+      "mode": "explore",
+      "direction": "Implement Variable Neighborhood Search (VNS). Define at least three nested neighborhoods: 1) Swapping two random operations on the same machine, 2) Swapping two random operations within the same job, and 3) Re-inserting an operation at a different position in its machine's sequence. Use a simple greedy descent as the local search within VNS.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 7,
+      "mode": "exploit",
+      "direction": "Refine the Shifting Bottleneck Heuristic (SBH). Ensure the release times (rj) and due dates (dj) for the single-machine subproblems are updated correctly using forward and backward passes on the disjunctive graph. Solve the 1|rj,dj|Lmax subproblem using Carlier's algorithm or an optimized Schrage's algorithm.",
+      "source_refs": [
+        {
+          "agent_id": 7,
+          "iteration": 2
+        }
+      ]
+    }
+  ]
+}

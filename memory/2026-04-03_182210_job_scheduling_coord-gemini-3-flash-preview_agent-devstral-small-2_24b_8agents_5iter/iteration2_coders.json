@@ -1,0 +1,203 @@
+[
+  {
+    "record_type": "agent_attempt",
+    "iteration": 2,
+    "agent_id": 0,
+    "mode": "explore",
+    "direction": "Implement Iterated Local Search (ILS). Use the MDD rule for an initial solution, apply a local search (like insertion moves), and then use a 'perturbation' step (e.g., several random swaps) to escape local optima and restart the search.",
+    "source_refs": [],
+    "approach": "Iterated Local Search with MDD initial solution and insertion-based local search",
+    "code": "import random\n\ndef schedule(jobs: list[dict]) -> list[int]:\n    # Extract job data for easier manipulation\n    job_ids = [job[\"id\"] for job in jobs]\n    processing_times = [job[\"processing_time\"] for job in jobs]\n    due_dates = [job[\"due_date\"] for job in jobs]\n    n = len(jobs)\n\n    # Initial solution using Modified Due Date (MDD) rule\n    def mdd_initial_solution():\n        current_time = 0\n        unscheduled_jobs = list(range(n))\n        schedule_order = []\n        while unscheduled_jobs:\n            # Calculate MDD for each unscheduled job\n            mdd_values = []\n            for job_idx in unscheduled_jobs:\n                pt = processing_times[job_idx]\n                dd = due_dates[job_idx]\n                mdd = max(current_time + pt, dd)\n                mdd_values.append((mdd, job_idx))\n            # Select job with smallest MDD\n            mdd_values.sort()\n            selected_job = mdd_values[0][1]\n            schedule_order.append(selected_job)\n            current_time += processing_times[selected_job]\n            unscheduled_jobs.remove(selected_job)\n        return schedule_order\n\n    # Local search using insertion moves\n    def local_search(schedule_order):\n        best_schedule = schedule_order.copy()\n        best_tardiness = compute_total_tardiness(best_schedule)\n        improved = True\n        while improved:\n            improved = False\n            for i in range(n):\n                for j in range(n):\n                    if i == j:\n                        continue\n                    # Create a new schedule by inserting job i after job j\n                    new_schedule = schedule_order.copy()\n                    job_to_move = new_schedule.pop(i)\n                    new_schedule.insert(j, job_to_move)\n                    current_tardiness = compute_total_tardiness(new_schedule)\n                    if current_tardiness < best_tardiness:\n                        best_tardiness = current_tardiness\n                        best_schedule = new_schedule.copy()\n                        improved = True\n            schedule_order = best_schedule.copy()\n        return best_schedule\n\n    # Perturbation step: perform random swaps\n    def perturb(schedule_order, num_swaps=3):\n        new_schedule = schedule_order.copy()\n        for _ in range(num_swaps):\n            i, j = random.sample(range(n), 2)\n            new_schedule[i], new_schedule[j] = new_schedule[j], new_schedule[i]\n        return new_schedule\n\n    # Compute total tardiness for a given schedule\n    def compute_total_tardiness(schedule_order):\n        current_time = 0\n        total_tardiness = 0\n        for job_idx in schedule_order:\n            current_time += processing_times[job_idx]\n            tardiness = max(0, current_time - due_dates[job_idx])\n            total_tardiness += tardiness\n        return total_tardiness\n\n    # Iterated Local Search\n    current_schedule = mdd_initial_solution()\n    current_tardiness = compute_total_tardiness(current_schedule)\n    best_schedule = current_schedule.copy()\n    best_tardiness = current_tardiness\n\n    max_iterations = 100\n    for _ in range(max_iterations):\n        # Local search\n        current_schedule = local_search(current_schedule)\n        current_tardiness = compute_total_tardiness(current_schedule)\n\n        # Update best solution\n        if current_tardiness < best_tardiness:\n            best_schedule = current_schedule.copy()\n            best_tardiness = current_tardiness\n\n        # Perturbation\n        current_schedule = perturb(current_schedule)\n\n    # Convert job indices to job IDs\n    return [job_ids[i] for i in best_schedule]",
+    "score": 17405,
+    "success": true,
+    "error": null,
+    "failure_reason": null,
+    "notes": "Aggregate=17405 | 100jobs_t0.8=13670 | 20jobs_t0.4=590 | 50jobs_t0.6=3145 | The approach combines an MDD-based initial solution with Iterated Local Search (ILS) to minimize total tardiness. Local search uses insertion moves to explore neighboring solutions, while perturbation introduces randomness to escape local optima. The algorithm balances exploration and exploitation to find a good schedule.",
+    "instance_scores": {
+      "20jobs_t0.4": 590,
+      "50jobs_t0.6": 3145,
+      "100jobs_t0.8": 13670
+    },
+    "instance_errors": {}
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 2,
+    "agent_id": 1,
+    "mode": "exploit",
+    "direction": "Refine the Simulated Annealing approach by initializing the schedule with the MDD rule instead of a random shuffle. Expand the neighborhood to include both swaps and insertions, and implement a slower cooling schedule to allow for deeper exploitation.",
+    "source_refs": [
+      {
+        "agent_id": 1,
+        "iteration": 1
+      },
+      {
+        "agent_id": 4,
+        "iteration": 1
+      }
+    ],
+    "approach": "Simulated Annealing with MDD initialization, swap and insertion neighborhood, and slower cooling",
+    "code": "import random\nimport math\n\ndef schedule(jobs: list[dict]) -> list[int]:\n    # Extract job IDs, processing times, and due dates for easier manipulation\n    job_ids = [job[\"id\"] for job in jobs]\n    processing_times = [job[\"processing_time\"] for job in jobs]\n    due_dates = [job[\"due_date\"] for job in jobs]\n    n = len(jobs)\n\n    # Helper function to calculate total tardiness for a given schedule\n    def calculate_tardiness(schedule):\n        total_tardiness = 0\n        current_time = 0\n        for job_id in schedule:\n            job_idx = job_ids.index(job_id)\n            processing_time = processing_times[job_idx]\n            due_date = due_dates[job_idx]\n            current_time += processing_time\n            tardiness = max(0, current_time - due_date)\n            total_tardiness += tardiness\n        return total_tardiness\n\n    # Initialize schedule using the Modified Due Date (MDD) rule\n    current_time = 0\n    scheduled_jobs = []\n    remaining_jobs = jobs.copy()\n    \n    while remaining_jobs:\n        # Calculate MDD for each remaining job\n        mdd_jobs = []\n        for job in remaining_jobs:\n            mdd = max(job[\"due_date\"], current_time + job[\"processing_time\"])\n            mdd_jobs.append((mdd, job))\n        \n        # Sort jobs by MDD (ascending order)\n        mdd_jobs.sort(key=lambda x: x[0])\n        \n        # Select the job with the smallest MDD\n        selected_job = mdd_jobs[0][1]\n        scheduled_jobs.append(selected_job[\"id\"])\n        \n        # Update current time and remove the scheduled job from remaining jobs\n        current_time += selected_job[\"processing_time\"]\n        remaining_jobs.remove(selected_job)\n    \n    current_schedule = scheduled_jobs\n    current_tardiness = calculate_tardiness(current_schedule)\n\n    # Simulated Annealing parameters\n    initial_temp = 1000\n    final_temp = 0.1\n    cooling_rate = 0.999\n    current_temp = initial_temp\n\n    # Main Simulated Annealing loop\n    while current_temp > final_temp:\n        # Generate a neighbor using either swap or insertion\n        neighbor_schedule = current_schedule.copy()\n        if random.random() < 0.5:\n            # Swap two random jobs\n            i, j = random.sample(range(n), 2)\n            neighbor_schedule[i], neighbor_schedule[j] = neighbor_schedule[j], neighbor_schedule[i]\n        else:\n            # Insert a job at a random position\n            i, j = random.sample(range(n), 2)\n            job_to_move = neighbor_schedule.pop(i)\n            neighbor_schedule.insert(j, job_to_move)\n        \n        neighbor_tardiness = calculate_tardiness(neighbor_schedule)\n\n        # Calculate the change in tardiness\n        delta_tardiness = neighbor_tardiness - current_tardiness\n\n        # Decide whether to accept the neighbor\n        if delta_tardiness < 0 or random.random() < math.exp(-delta_tardiness / current_temp):\n            current_schedule = neighbor_schedule\n            current_tardiness = neighbor_tardiness\n\n        # Cool the temperature\n        current_temp *= cooling_rate\n\n    return current_schedule",
+    "score": 17700,
+    "success": true,
+    "error": null,
+    "failure_reason": null,
+    "notes": "Aggregate=17700 | 100jobs_t0.8=13964 | 20jobs_t0.4=590 | 50jobs_t0.6=3146 | Combined MDD initialization with Simulated Annealing to balance exploration and exploitation. Expanded neighborhood to include both swaps and insertions for better solution diversity. Slower cooling schedule allows deeper exploitation of promising regions.",
+    "instance_scores": {
+      "20jobs_t0.4": 590,
+      "50jobs_t0.6": 3146,
+      "100jobs_t0.8": 13964
+    },
+    "instance_errors": {}
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 2,
+    "agent_id": 2,
+    "mode": "explore",
+    "direction": "Develop a Large Neighborhood Search (LNS) algorithm. Use a 'destroy' operator that removes a contiguous block of jobs or a set of jobs with high individual tardiness, and a 'repair' operator that re-inserts them using a greedy MDD-based logic.",
+    "source_refs": [],
+    "approach": "Large Neighborhood Search (LNS) with contiguous block destroy and greedy MDD-based repair",
+    "code": "import random\n\ndef schedule(jobs: list[dict]) -> list[int]:\n    # Extract job IDs for easier manipulation\n    job_ids = [job['id'] for job in jobs]\n    processing_times = [job['processing_time'] for job in jobs]\n    due_dates = [job['due_date'] for job in jobs]\n    \n    # Initial solution: sort by due date (EDD rule)\n    current_schedule = sorted(job_ids, key=lambda x: due_dates[x])\n    current_tardiness = calculate_total_tardiness(current_schedule, processing_times, due_dates)\n    \n    # LNS parameters\n    max_iterations = 1000\n    destroy_size = max(3, len(jobs) // 10)  # Destroy at least 3 jobs or 10% of the schedule\n    \n    for iteration in range(max_iterations):\n        # Destroy: remove a contiguous block of jobs\n        start_idx = random.randint(0, len(current_schedule) - destroy_size)\n        removed_jobs = current_schedule[start_idx:start_idx + destroy_size]\n        remaining_schedule = current_schedule[:start_idx] + current_schedule[start_idx + destroy_size:]\n        \n        # Repair: re-insert removed jobs using greedy MDD-based logic\n        for job in removed_jobs:\n            best_position = 0\n            best_tardiness = float('inf')\n            \n            # Try inserting at every possible position\n            for pos in range(len(remaining_schedule) + 1):\n                temp_schedule = remaining_schedule[:pos] + [job] + remaining_schedule[pos:]\n                temp_tardiness = calculate_total_tardiness(temp_schedule, processing_times, due_dates)\n                \n                if temp_tardiness < best_tardiness:\n                    best_tardiness = temp_tardiness\n                    best_position = pos\n            \n            remaining_schedule = remaining_schedule[:best_position] + [job] + remaining_schedule[best_position:]\n        \n        # Update current schedule if improved\n        new_tardiness = calculate_total_tardiness(remaining_schedule, processing_times, due_dates)\n        if new_tardiness < current_tardiness:\n            current_schedule = remaining_schedule\n            current_tardiness = new_tardiness\n        \n        # Early termination if no improvement\n        if new_tardiness >= current_tardiness:\n            break\n    \n    return current_schedule\n\ndef calculate_total_tardiness(schedule: list[int], processing_times: list[int], due_dates: list[int]) -> int:\n    total_tardiness = 0\n    current_time = 0\n    for job_id in schedule:\n        current_time += processing_times[job_id]\n        tardiness = max(0, current_time - due_dates[job_id])\n        total_tardiness += tardiness\n    return total_tardiness",
+    "score": 24033,
+    "success": true,
+    "error": null,
+    "failure_reason": null,
+    "notes": "Aggregate=24033 | 100jobs_t0.8=18048 | 20jobs_t0.4=772 | 50jobs_t0.6=5213 | The algorithm starts with an initial solution using the Earliest Due Date (EDD) rule. It then iteratively improves the solution using Large Neighborhood Search (LNS), where a contiguous block of jobs is removed and re-inserted using a greedy approach based on Modified Due Date (MDD) logic. The goal is to minimize total tardiness by exploring local neighborhoods efficiently.",
+    "instance_scores": {
+      "20jobs_t0.4": 772,
+      "50jobs_t0.6": 5213,
+      "100jobs_t0.8": 18048
+    },
+    "instance_errors": {}
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 2,
+    "agent_id": 3,
+    "mode": "exploit",
+    "direction": "Enhance the Variable Neighborhood Search (VNS) by using the MDD rule for initialization. Add a 'shaking' procedure that increases in intensity when the local search fails to find improvements, and ensure the local search uses the most efficient neighborhood (insertion) first.",
+    "source_refs": [
+      {
+        "agent_id": 3,
+        "iteration": 1
+      },
+      {
+        "agent_id": 5,
+        "iteration": 1
+      }
+    ],
+    "approach": "Enhanced VNS with MDD initialization, intensified shaking, and insertion-first local search",
+    "code": "import random\n\ndef calculate_total_tardiness(schedule, jobs):\n    job_map = {job['id']: job for job in jobs}\n    current_time = 0\n    total_tardiness = 0\n    for job_id in schedule:\n        job = job_map[job_id]\n        current_time += job['processing_time']\n        tardiness = max(0, current_time - job['due_date'])\n        total_tardiness += tardiness\n    return total_tardiness\n\n\ndef insertion_neighborhood(schedule):\n    new_schedule = schedule.copy()\n    i, j = random.sample(range(len(schedule)), 2)\n    if i < j:\n        new_schedule.insert(j + 1, new_schedule.pop(i))\n    else:\n        new_schedule.insert(j, new_schedule.pop(i))\n    return new_schedule\n\n\ndef swap_neighborhood(schedule):\n    new_schedule = schedule.copy()\n    i, j = random.sample(range(len(schedule)), 2)\n    new_schedule[i], new_schedule[j] = new_schedule[j], new_schedule[i]\n    return new_schedule\n\n\ndef two_opt_neighborhood(schedule):\n    new_schedule = schedule.copy()\n    i, j = sorted(random.sample(range(len(schedule)), 2))\n    new_schedule[i:j+1] = reversed(new_schedule[i:j+1])\n    return new_schedule\n\n\ndef schedule(jobs: list[dict]) -> list[int]:\n    # Initial solution using MDD rule\n    sorted_jobs = sorted(jobs, key=lambda x: x['due_date'])\n    current_time = 0\n    scheduled_order = []\n    remaining_jobs = sorted_jobs.copy()\n    \n    while remaining_jobs:\n        mdd_jobs = []\n        for job in remaining_jobs:\n            processing_time = job['processing_time']\n            due_date = job['due_date']\n            mdd = max(current_time + processing_time, due_date)\n            mdd_jobs.append((mdd, job))\n        \n        mdd_jobs.sort(key=lambda x: x[0])\n        selected_job = mdd_jobs[0][1]\n        scheduled_order.append(selected_job['id'])\n        current_time += selected_job['processing_time']\n        remaining_jobs.remove(selected_job)\n    \n    current_schedule = scheduled_order\n    current_tardiness = calculate_total_tardiness(current_schedule, jobs)\n    \n    # VNS parameters\n    neighborhoods = [insertion_neighborhood, swap_neighborhood, two_opt_neighborhood]\n    max_iterations = 1000\n    k_max = len(neighborhoods)\n    \n    for iteration in range(max_iterations):\n        k = 1\n        while k <= k_max:\n            # Shaking: increase intensity if no improvement\n            shake_intensity = min(k, 3)\n            for _ in range(shake_intensity):\n                neighbor = neighborhoods[k-1](current_schedule)\n                neighbor_tardiness = calculate_total_tardiness(neighbor, jobs)\n                \n                if neighbor_tardiness < current_tardiness:\n                    current_schedule = neighbor\n                    current_tardiness = neighbor_tardiness\n                    k = 1  # Restart from the first neighborhood\n                    break\n            else:\n                k += 1\n    \n    return current_schedule",
+    "score": 17542,
+    "success": true,
+    "error": null,
+    "failure_reason": null,
+    "notes": "Aggregate=17542 | 100jobs_t0.8=13783 | 20jobs_t0.4=590 | 50jobs_t0.6=3169 | Combined MDD initialization with VNS, prioritized insertion neighborhood, and added shaking intensity to escape local optima more effectively.",
+    "instance_scores": {
+      "20jobs_t0.4": 590,
+      "50jobs_t0.6": 3169,
+      "100jobs_t0.8": 13783
+    },
+    "instance_errors": {}
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 2,
+    "agent_id": 4,
+    "mode": "exploit",
+    "direction": "Improve the leading Tabu Search by initializing with the MDD rule. Optimize the neighborhood search by focusing on 'critical' jobs (those currently tardy) and use a more sophisticated tabu tenure that scales with the number of jobs.",
+    "source_refs": [
+      {
+        "agent_id": 6,
+        "iteration": 1
+      },
+      {
+        "agent_id": 4,
+        "iteration": 1
+      }
+    ],
+    "approach": "Tabu Search initialized with MDD heuristic, focusing on critical jobs and adaptive tabu tenure",
+    "code": "import random\nimport numpy as np\n\ndef calculate_tardiness(schedule, jobs):\n    job_dict = {job['id']: job for job in jobs}\n    total_tardiness = 0\n    current_time = 0\n    for job_id in schedule:\n        job = job_dict[job_id]\n        current_time += job['processing_time']\n        tardiness = max(0, current_time - job['due_date'])\n        total_tardiness += tardiness\n    return total_tardiness\n\ndef generate_initial_solution_mdd(jobs):\n    job_list = [{\n        \"id\": job[\"id\"],\n        \"processing_time\": job[\"processing_time\"],\n        \"due_date\": job[\"due_date\"]\n    } for job in jobs]\n    \n    current_time = 0\n    scheduled_jobs = []\n    remaining_jobs = job_list.copy()\n    \n    while remaining_jobs:\n        mdd_jobs = []\n        for job in remaining_jobs:\n            mdd = max(job[\"due_date\"], current_time + job[\"processing_time\"])\n            mdd_jobs.append((mdd, job))\n        \n        mdd_jobs.sort(key=lambda x: x[0])\n        selected_job = mdd_jobs[0][1]\n        scheduled_jobs.append(selected_job[\"id\"])\n        current_time += selected_job[\"processing_time\"]\n        remaining_jobs.remove(selected_job)\n    \n    return scheduled_jobs\n\ndef get_critical_jobs_neighbors(schedule, jobs):\n    job_dict = {job['id']: job for job in jobs}\n    neighbors = []\n    current_time = 0\n    tardy_jobs = []\n    \n    for job_id in schedule:\n        job = job_dict[job_id]\n        current_time += job['processing_time']\n        if current_time > job['due_date']:\n            tardy_jobs.append(job_id)\n    \n    if not tardy_jobs:\n        tardy_jobs = schedule.copy()\n    \n    for i in range(len(tardy_jobs)):\n        for j in range(i + 1, len(tardy_jobs)):\n            neighbor = schedule.copy()\n            idx_i = schedule.index(tardy_jobs[i])\n            idx_j = schedule.index(tardy_jobs[j])\n            neighbor[idx_i], neighbor[idx_j] = neighbor[idx_j], neighbor[idx_i]\n            neighbors.append(neighbor)\n    \n    return neighbors\n\ndef schedule(jobs: list[dict]) -> list[int]:\n    max_iterations = 1000\n    tabu_tenure = max(10, len(jobs) // 5)\n    tabu_list = []\n    \n    current_solution = generate_initial_solution_mdd(jobs)\n    best_solution = current_solution.copy()\n    best_tardiness = calculate_tardiness(current_solution, jobs)\n    \n    for _ in range(max_iterations):\n        neighbors = get_critical_jobs_neighbors(current_solution, jobs)\n        best_neighbor = None\n        best_neighbor_tardiness = float('inf')\n        \n        for neighbor in neighbors:\n            neighbor_tardiness = calculate_tardiness(neighbor, jobs)\n            move = (current_solution.index(neighbor[0]), current_solution.index(neighbor[1]))\n            is_tabu = move in tabu_list\n            \n            if neighbor_tardiness < best_tardiness or not is_tabu:\n                if neighbor_tardiness < best_neighbor_tardiness:\n                    best_neighbor = neighbor\n                    best_neighbor_tardiness = neighbor_tardiness\n        \n        if best_neighbor is None:\n            break\n        \n        current_solution = best_neighbor\n        \n        if best_neighbor_tardiness < best_tardiness:\n            best_solution = best_neighbor.copy()\n            best_tardiness = best_neighbor_tardiness\n        \n        move = (current_solution.index(best_neighbor[0]), current_solution.index(best_neighbor[1]))\n        tabu_list.append(move)\n        if len(tabu_list) > tabu_tenure:\n            tabu_list.pop(0)\n    \n    return best_solution",
+    "score": 17462,
+    "success": true,
+    "error": null,
+    "failure_reason": null,
+    "notes": "Aggregate=17462 | 100jobs_t0.8=13688 | 20jobs_t0.4=607 | 50jobs_t0.6=3167 | Combined MDD heuristic for initialization and Tabu Search for refinement. Focused neighborhood search on tardy jobs and adaptive tabu tenure for scalability.",
+    "instance_scores": {
+      "20jobs_t0.4": 607,
+      "50jobs_t0.6": 3167,
+      "100jobs_t0.8": 13688
+    },
+    "instance_errors": {}
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 2,
+    "agent_id": 5,
+    "mode": "exploit",
+    "direction": "Extend the MDD heuristic into a Beam Search. Instead of a purely greedy selection, maintain a 'beam' of the top K partial schedules at each step, evaluating them based on current tardiness plus a look-ahead estimate of future tardiness.",
+    "source_refs": [
+      {
+        "agent_id": 5,
+        "iteration": 1
+      }
+    ],
+    "approach": "Beam search with total tardiness estimation and fallback to earliest due date for incomplete schedules",
+    "code": "import heapq\n\ndef schedule(jobs: list[dict]) -> list[int]:\n    # Beam width: number of partial schedules to keep at each step\n    beam_width = 10\n\n    # Precompute job indices for quick lookup\n    job_indices = {job[\"id\"]: idx for idx, job in enumerate(jobs)}\n\n    # Initialize the beam with empty schedules\n    beam = []\n    initial_state = {\n        \"order\": [],\n        \"current_time\": 0,\n        \"remaining_jobs\": set(job[\"id\"] for job in jobs),\n        \"total_tardiness\": 0\n    }\n    heapq.heappush(beam, (0, initial_state))\n\n    best_schedule = None\n    best_tardiness = float('inf')\n\n    while beam:\n        new_beam = []\n\n        for _ in range(min(beam_width, len(beam))):\n            if not beam:\n                break\n            _, state = heapq.heappop(beam)\n\n            if not state[\"remaining_jobs\"]:\n                if state[\"total_tardiness\"] < best_tardiness:\n                    best_schedule = state[\"order\"]\n                    best_tardiness = state[\"total_tardiness\"]\n                continue\n\n            # Generate all possible next steps\n            for job_id in state[\"remaining_jobs\"]:\n                job = jobs[job_indices[job_id]]\n                new_order = state[\"order\"] + [job_id]\n                new_current_time = state[\"current_time\"] + job[\"processing_time\"]\n                new_tardiness = max(0, new_current_time - job[\"due_date\"])\n                new_total_tardiness = state[\"total_tardiness\"] + new_tardiness\n\n                # Look-ahead estimation: estimate future tardiness\n                remaining_jobs_list = list(state[\"remaining_jobs\"] - {job_id})\n                if remaining_jobs_list:\n                    # Sort remaining jobs by due date for estimation\n                    remaining_jobs_sorted = sorted(\n                        (jobs[job_indices[jid]] for jid in remaining_jobs_list),\n                        key=lambda x: x[\"due_date\"]\n                    )\n                    estimated_future_tardiness = 0\n                    current_est_time = new_current_time\n                    for rjob in remaining_jobs_sorted:\n                        current_est_time += rjob[\"processing_time\"]\n                        estimated_future_tardiness += max(0, current_est_time - rjob[\"due_date\"])\n                else:\n                    estimated_future_tardiness = 0\n\n                total_estimated_tardiness = new_total_tardiness + estimated_future_tardiness\n\n                new_state = {\n                    \"order\": new_order,\n                    \"current_time\": new_current_time,\n                    \"remaining_jobs\": state[\"remaining_jobs\"] - {job_id},\n                    \"total_tardiness\": new_total_tardiness\n                }\n                heapq.heappush(new_beam, (total_estimated_tardiness, new_state))\n\n        beam = new_beam\n\n    # Fallback: return the best schedule found if beam search completes\n    if best_schedule is not None:\n        return best_schedule\n\n    # If no complete schedule found, use earliest due date heuristic\n    sorted_jobs = sorted(jobs, key=lambda x: x[\"due_date\"])\n    return [job[\"id\"] for job in sorted_jobs]",
+    "score": null,
+    "success": false,
+    "error": "TypeError: '<' not supported between instances of 'dict' and 'dict'",
+    "failure_reason": "type error \u2014 '<' not supported between instances of 'dict' and 'dict'",
+    "notes": "Fixed the beam search implementation to ensure a valid permutation is always returned. Added a fallback to the earliest due date heuristic if the beam search fails to complete. The algorithm now tracks the best complete schedule found and returns it if available. (fixed after pre-test retry 1)",
+    "instance_scores": {},
+    "instance_errors": {
+      "20jobs_t0.4": "TypeError: '<' not supported between instances of 'dict' and 'dict'",
+      "50jobs_t0.6": "TypeError: '<' not supported between instances of 'dict' and 'dict'",
+      "100jobs_t0.8": "TypeError: '<' not supported between instances of 'dict' and 'dict'"
+    }
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 2,
+    "agent_id": 6,
+    "mode": "explore",
+    "direction": "Implement a Greedy Randomized Adaptive Search Procedure (GRASP). In the construction phase, use a restricted candidate list (RCL) based on MDD values to build diverse initial solutions, followed by a local search phase using insertion moves.",
+    "source_refs": [],
+    "approach": "GRASP with MDD-based RCL construction and insertion local search",
+    "code": "import random\nimport math\n\ndef schedule(jobs: list[dict]) -> list[int]:\n    def calculate_total_tardiness(order):\n        current_time = 0\n        total_tardiness = 0\n        for job_id in order:\n            job = next(job for job in jobs if job[\"id\"] == job_id)\n            current_time += job[\"processing_time\"]\n            total_tardiness += max(0, current_time - job[\"due_date\"])\n        return total_tardiness\n\n    def construct_initial_solution(alpha):\n        scheduled = []\n        unscheduled = jobs.copy()\n        while unscheduled:\n            # Calculate MDD for each unscheduled job\n            mdd_values = []\n            for job in unscheduled:\n                current_time = sum(jobs[id][\"processing_time\"] for id in scheduled)\n                mdd = max(0, current_time + job[\"processing_time\"] - job[\"due_date\"])\n                mdd_values.append(mdd)\n            \n            min_mdd = min(mdd_values)\n            max_mdd = max(mdd_values)\n            threshold = min_mdd + alpha * (max_mdd - min_mdd)\n            \n            # Build RCL\n            rcl = [job for job, mdd in zip(unscheduled, mdd_values) if mdd <= threshold]\n            if not rcl:\n                rcl = unscheduled\n            \n            # Select a random job from RCL\n            selected_job = random.choice(rcl)\n            scheduled.append(selected_job[\"id\"])\n            unscheduled.remove(selected_job)\n        return scheduled\n\n    def local_search(order):\n        improved = True\n        while improved:\n            improved = False\n            current_tardiness = calculate_total_tardiness(order)\n            for i in range(len(order)):\n                for j in range(len(order)):\n                    if i == j:\n                        continue\n                    new_order = order.copy()\n                    job_id = new_order.pop(i)\n                    new_order.insert(j, job_id)\n                    new_tardiness = calculate_total_tardiness(new_order)\n                    if new_tardiness < current_tardiness:\n                        order = new_order\n                        current_tardiness = new_tardiness\n                        improved = True\n                        break\n                if improved:\n                    break\n        return order\n\n    # GRASP parameters\n    max_iterations = 100\n    alpha = 0.3\n\n    best_order = None\n    best_tardiness = float('inf')\n\n    for _ in range(max_iterations):\n        initial_order = construct_initial_solution(alpha)\n        improved_order = local_search(initial_order)\n        current_tardiness = calculate_total_tardiness(improved_order)\n        if current_tardiness < best_tardiness:\n            best_tardiness = current_tardiness\n            best_order = improved_order\n\n    return best_order",
+    "score": null,
+    "success": false,
+    "error": "Execution timed out after 120 seconds",
+    "failure_reason": "execution timed out \u2014 code took too long, needs a faster algorithm or early termination",
+    "notes": "Aggregate=590 | 20jobs_t0.4=590 | Failed: 100jobs_t0.8: Execution timed out after 120 seconds; 50jobs_t0.6: Execution timed out after 120 seconds | The algorithm uses GRASP with a construction phase that builds initial solutions using a restricted candidate list based on MDD values. The local search phase improves solutions using insertion moves. The alpha parameter controls the diversity of the RCL.",
+    "instance_scores": {
+      "20jobs_t0.4": 590
+    },
+    "instance_errors": {
+      "50jobs_t0.6": "Execution timed out after 120 seconds",
+      "100jobs_t0.8": "Execution timed out after 120 seconds"
+    }
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 2,
+    "agent_id": 7,
+    "mode": "explore",
+    "direction": "Explore the Late Acceptance Hill Climbing (LAHC) algorithm. This metaheuristic is simpler than SA or Tabu Search but often more robust; it accepts a move if its fitness is better than the fitness of the solution several iterations ago.",
+    "source_refs": [],
+    "approach": "Late Acceptance Hill Climbing (LAHC) to minimize total tardiness",
+    "code": "import random\n\ndef schedule(jobs: list[dict]) -> list[int]:\n    # Extract job IDs and create a list of job indices\n    job_ids = [job[\"id\"] for job in jobs]\n    n = len(job_ids)\n    \n    # Initialize current solution as a random permutation\n    current_solution = job_ids.copy()\n    random.shuffle(current_solution)\n    \n    # Function to compute total tardiness for a given schedule\n    def compute_tardiness(schedule):\n        total_tardiness = 0\n        current_time = 0\n        for job_id in schedule:\n            job = jobs[job_id]\n            current_time += job[\"processing_time\"]\n            tardiness = max(0, current_time - job[\"due_date\"])\n            total_tardiness += tardiness\n        return total_tardiness\n    \n    # Initialize LAHC parameters\n    l = 10  # Length of the history list\n    history = [compute_tardiness(current_solution)] * l\n    \n    # LAHC main loop\n    max_iterations = 1000\n    for _ in range(max_iterations):\n        # Generate a neighboring solution by swapping two random jobs\n        neighbor = current_solution.copy()\n        i, j = random.sample(range(n), 2)\n        neighbor[i], neighbor[j] = neighbor[j], neighbor[i]\n        \n        # Compute tardiness for the neighbor\n        neighbor_tardiness = compute_tardiness(neighbor)\n        current_tardiness = compute_tardiness(current_solution)\n        \n        # Acceptance criterion: accept if better than the solution l iterations ago\n        if neighbor_tardiness < history[0]:\n            current_solution = neighbor\n            current_tardiness = neighbor_tardiness\n        \n        # Update history\n        history.pop(0)\n        history.append(current_tardiness)\n    \n    return current_solution",
+    "score": 27091,
+    "success": true,
+    "error": null,
+    "failure_reason": null,
+    "notes": "Aggregate=27091 | 100jobs_t0.8=23119 | 20jobs_t0.4=593 | 50jobs_t0.6=3379 | LAHC is used to explore the solution space by accepting moves that improve the solution compared to a historical reference. This balances exploration and exploitation without requiring complex parameter tuning. The algorithm is robust and works well for diverse problem sizes.",
+    "instance_scores": {
+      "20jobs_t0.4": 593,
+      "50jobs_t0.6": 3379,
+      "100jobs_t0.8": 23119
+    },
+    "instance_errors": {}
+  }
+]

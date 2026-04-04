@@ -1,0 +1,19 @@
+{
+  "record_type": "coordinator_decision",
+  "iteration": 1,
+  "analysis": null,
+  "assignments": [
+    {
+      "agent_id": 0,
+      "mode": "explore",
+      "direction": "Implement a Genetic Algorithm with tournament selection and uniform crossover to minimize total tardiness in job scheduling.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 1,
+      "mode": "explore",
+      "direction": "Develop a Simulated Annealing approach using an exponential cooling schedule to solve the job scheduling problem.",
+      "source_refs": []
+    }
+  ]
+}

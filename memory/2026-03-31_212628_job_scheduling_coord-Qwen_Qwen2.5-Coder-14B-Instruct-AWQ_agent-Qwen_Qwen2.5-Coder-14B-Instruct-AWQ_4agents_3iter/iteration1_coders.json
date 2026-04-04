@@ -1,0 +1,82 @@
+[
+  {
+    "record_type": "agent_attempt",
+    "iteration": 1,
+    "agent_id": 0,
+    "mode": "explore",
+    "direction": "Implement a genetic algorithm to explore the search space for job scheduling.",
+    "source_refs": [],
+    "approach": "Implement a Genetic Algorithm to minimize total tardiness in job scheduling.",
+    "code": "from typing import List, Dictimport randomfrom collections import defaultdictdef evaluate_schedule(schedule: List[int], jobs: List[Dict[str, int]]) -> int:    job_map = {job['id']: job for job in jobs}    current_time = 0    total_tardiness = 0    for job_id in schedule:        job = job_map[job_id]        current_time += job['processing_time']        tardiness = max(0, current_time - job['due_date'])        total_tardiness += tardiness    return total_tardinessdef crossover(parent1: List[int], parent2: List[int]) -> List[int]:    crossover_point = random.randint(1, len(parent1) - 1)    child = parent1[:crossover_point] + [gene for gene in parent2 if gene not in child]    return childdef mutate(schedule: List[int], mutation_rate: float = 0.01) -> List[int]:    schedule_copy = schedule[:]    for i in range(len(schedule_copy)):        if random.random() < mutation_rate:            swap_index = random.randint(0, len(schedule_copy) - 1)            schedule_copy[i], schedule_copy[swap_index] = schedule_copy[swap_index], schedule_copy[i]    return schedule_copydef genetic_algorithm(jobs: List[Dict[str, int]], population_size: int = 50, generations: int = 100, mutation_rate: float = 0.01) -> List[int]:    job_ids = [job['id'] for job in jobs]    population = [random.sample(job_ids, len(job_ids)) for _ in range(population_size)]    best_schedule = min(population, key=lambda x: evaluate_schedule(x, jobs))    best_tardiness = evaluate_schedule(best_schedule, jobs)    for generation in range(generations):        population.sort(key=lambda x: evaluate_schedule(x, jobs))        if evaluate_schedule(population[0], jobs) < best_tardiness:            best_schedule = population[0]            best_tardiness = evaluate_schedule(population[0], jobs)        next_generation = [population[0]]  # elitism        while len(next_generation) < population_size:            parent1, parent2 = random.choices(population[:len(population)//2], k=2)            child = crossover(parent1, parent2)            child = mutate(child, mutation_rate)            next_generation.append(child)        population = next_generation    return best_scheduledef schedule(jobs: List[Dict[str, int]]) -> List[int]:    return genetic_algorithm(jobs)",
+    "score": null,
+    "success": false,
+    "error": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_74d33mlp\\agent_run.py\", line 27\n    child = mutate(child, mutation_rate)            next_generation.append(child)        population = next_generation    return best_scheduledef schedule(jobs: List[Dict[str, int]]) -> List[int]:    return genetic_algorithm(jobs)\n                                ^^^^^^^^^^\nSyntaxError: invalid syntax\n",
+    "failure_reason": "syntax error \u2014 invalid Python syntax: invalid syntax",
+    "notes": "Fixed the syntax error by properly closing the evaluate_schedule function definition. Ensured that the genetic algorithm generates valid permutations of job IDs. (fixed after pre-test retry 1)",
+    "instance_scores": {},
+    "instance_errors": {
+      "20jobs_t0.4": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_74d33mlp\\agent_run.py\", line 27\n    child = mutate(child, mutation_rate)            next_generation.append(child)        population = next_generation    return best_scheduledef schedule(jobs: List[Dict[str, int]]) -> List[int]:    return genetic_algorithm(jobs)\n                                ^^^^^^^^^^\nSyntaxError: invalid syntax\n",
+      "50jobs_t0.6": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_nd6vs_bz\\agent_run.py\", line 27\n    child = mutate(child, mutation_rate)            next_generation.append(child)        population = next_generation    return best_scheduledef schedule(jobs: List[Dict[str, int]]) -> List[int]:    return genetic_algorithm(jobs)\n                                ^^^^^^^^^^\nSyntaxError: invalid syntax\n",
+      "100jobs_t0.8": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_a1jth9qb\\agent_run.py\", line 27\n    child = mutate(child, mutation_rate)            next_generation.append(child)        population = next_generation    return best_scheduledef schedule(jobs: List[Dict[str, int]]) -> List[int]:    return genetic_algorithm(jobs)\n                                ^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    }
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 1,
+    "agent_id": 1,
+    "mode": "explore",
+    "direction": "Develop a simulated annealing approach to optimize job scheduling.",
+    "source_refs": [],
+    "approach": "Implementing a simulated annealing algorithm to minimize total tardiness.",
+    "code": "import random import math def schedule(jobs: list[dict]) -> list[int]: def total_tardiness(order): completion_time = 0 tardiness = 0 for job_id in order: job = jobs[job_id] completion_time += job['processing_time'] tardiness += max(0, completion_time - job['due_date']) return tardiness initial_order = list(range(len(jobs))) best_order = initial_order best_tardiness = total_tardiness(initial_order) temperature = 1000 cooling_rate = 0.99 while temperature > 0.1: order = initial_order.copy() i, j = random.sample(range(len(jobs)), 2) order[i], order[j] = order[j], order[i] current_tardiness = total_tardiness(order) delta = current_tardiness - best_tardiness if delta < 0: best_order = order best_tardiness = current_tardiness elif random.random() < math.exp(-delta / temperature): initial_order = order temperature *= cooling_rate return best_order",
+    "score": null,
+    "success": false,
+    "error": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_7nd9i7gy\\agent_run.py\", line 27\n    import random import math def schedule(jobs: list[dict]) -> list[int]: def total_tardiness(order): completion_time = 0 tardiness = 0 for job_id in order: job = jobs[job_id] completion_time += job['processing_time'] tardiness += max(0, completion_time - job['due_date']) return tardiness initial_order = list(range(len(jobs))) best_order = initial_order best_tardiness = total_tardiness(initial_order) temperature = 1000 cooling_rate = 0.99 while temperature > 0.1: order = initial_order.copy() i, j = random.sample(range(len(jobs)), 2) order[i], order[j] = order[j], order[i] current_tardiness = total_tardiness(order) delta = current_tardiness - best_tardiness if delta < 0: best_order = order best_tardiness = current_tardiness elif random.random() < math.exp(-delta / temperature): initial_order = order temperature *= cooling_rate return best_order\n                  ^^^^^^\nSyntaxError: invalid syntax\n",
+    "failure_reason": "syntax error \u2014 invalid Python syntax: invalid syntax",
+    "notes": "Fixed syntax errors by properly importing modules and correcting indentation. (fixed after pre-test retry 1)",
+    "instance_scores": {},
+    "instance_errors": {
+      "20jobs_t0.4": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_7nd9i7gy\\agent_run.py\", line 27\n    import random import math def schedule(jobs: list[dict]) -> list[int]: def total_tardiness(order): completion_time = 0 tardiness = 0 for job_id in order: job = jobs[job_id] completion_time += job['processing_time'] tardiness += max(0, completion_time - job['due_date']) return tardiness initial_order = list(range(len(jobs))) best_order = initial_order best_tardiness = total_tardiness(initial_order) temperature = 1000 cooling_rate = 0.99 while temperature > 0.1: order = initial_order.copy() i, j = random.sample(range(len(jobs)), 2) order[i], order[j] = order[j], order[i] current_tardiness = total_tardiness(order) delta = current_tardiness - best_tardiness if delta < 0: best_order = order best_tardiness = current_tardiness elif random.random() < math.exp(-delta / temperature): initial_order = order temperature *= cooling_rate return best_order\n                  ^^^^^^\nSyntaxError: invalid syntax\n",
+      "50jobs_t0.6": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_4ubxhbtc\\agent_run.py\", line 27\n    import random import math def schedule(jobs: list[dict]) -> list[int]: def total_tardiness(order): completion_time = 0 tardiness = 0 for job_id in order: job = jobs[job_id] completion_time += job['processing_time'] tardiness += max(0, completion_time - job['due_date']) return tardiness initial_order = list(range(len(jobs))) best_order = initial_order best_tardiness = total_tardiness(initial_order) temperature = 1000 cooling_rate = 0.99 while temperature > 0.1: order = initial_order.copy() i, j = random.sample(range(len(jobs)), 2) order[i], order[j] = order[j], order[i] current_tardiness = total_tardiness(order) delta = current_tardiness - best_tardiness if delta < 0: best_order = order best_tardiness = current_tardiness elif random.random() < math.exp(-delta / temperature): initial_order = order temperature *= cooling_rate return best_order\n                  ^^^^^^\nSyntaxError: invalid syntax\n",
+      "100jobs_t0.8": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_z4y1ghfd\\agent_run.py\", line 27\n    import random import math def schedule(jobs: list[dict]) -> list[int]: def total_tardiness(order): completion_time = 0 tardiness = 0 for job_id in order: job = jobs[job_id] completion_time += job['processing_time'] tardiness += max(0, completion_time - job['due_date']) return tardiness initial_order = list(range(len(jobs))) best_order = initial_order best_tardiness = total_tardiness(initial_order) temperature = 1000 cooling_rate = 0.99 while temperature > 0.1: order = initial_order.copy() i, j = random.sample(range(len(jobs)), 2) order[i], order[j] = order[j], order[i] current_tardiness = total_tardiness(order) delta = current_tardiness - best_tardiness if delta < 0: best_order = order best_tardiness = current_tardiness elif random.random() < math.exp(-delta / temperature): initial_order = order temperature *= cooling_rate return best_order\n                  ^^^^^^\nSyntaxError: invalid syntax\n"
+    }
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 1,
+    "agent_id": 2,
+    "mode": "explore",
+    "direction": "Create a particle swarm optimization algorithm for job scheduling.",
+    "source_refs": [],
+    "approach": "Failed to get LLM response",
+    "code": "",
+    "score": null,
+    "success": false,
+    "error": "LLM error (UnexpectedModelBehavior): Model token limit (4096) exceeded before any response was generated. Increase the `max_tokens` model setting, or simplify the prompt to result in a shorter response that will fit within the limit.",
+    "failure_reason": "LLM unreachable \u2014 could not get a response from the model",
+    "notes": "",
+    "instance_scores": {},
+    "instance_errors": {}
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 1,
+    "agent_id": 3,
+    "mode": "explore",
+    "direction": "Design a tabu search method to minimize total tardiness in job scheduling.",
+    "source_refs": [],
+    "approach": "Tabu Search algorithm to minimize total tardiness",
+    "code": "from typing import List, Dict, Tupleimport randomimport numpy as npfrom scipy.optimize import linear_sum_assignmentfrom itertools import permutationsdef calculate_tardiness(schedule: List[int], jobs: List[Dict[str, int]]) -> int:    total_tardiness = 0    current_time = 0    for job_id in schedule:        job = jobs[job_id]        current_time += job['processing_time']        tardiness = max(0, current_time - job['due_date'])        total_tardiness += tardiness    return total_tardinessdef generate_initial_solution(jobs: List[Dict[str, int]]) -> List[int]:    return list(range(len(jobs)))def tabu_search(jobs: List[Dict[str, int]], max_iterations: int = 1000, tabu_tenure: int = 30) -> List[int]:    current_solution = generate_initial_solution(jobs)    best_solution = current_solution.copy()    best_tardiness = calculate_tardiness(current_solution, jobs)    tabu_list = []    iteration = 0    while iteration < max_iterations:        neighborhood = []        for i in range(len(current_solution)):            for j in range(i + 1, len(current_solution)):                neighbor = current_solution.copy()                neighbor[i], neighbor[j] = neighbor[j], neighbor[i]                neighborhood.append((neighbor, i, j))        best_neighbor = None        best_neighbor_tardiness = float('inf')        for neighbor, i, j in neighborhood:            if (i, j) not in tabu_list:                tardiness = calculate_tardiness(neighbor, jobs)                if tardiness < best_neighbor_tardiness:                    best_neighbor = neighbor                    best_neighbor_tardiness = tardiness                    best_move = (i, j)        if best_neighbor is not None:            current_solution = best_neighbor            tabu_list.append(best_move)            if len(tabu_list) > tabu_tenure:                tabu_list.pop(0)            if best_neighbor_tardiness < best_tardiness:                best_solution = best_neighbor                best_tardiness = best_neighbor_tardiness        iteration += 1    return best_solutiondef schedule(jobs: List[Dict[str, int]]) -> List[int]:    return tabu_search(jobs)",
+    "score": null,
+    "success": false,
+    "error": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_q2gytnul\\agent_run.py\", line 27\n    iteration += 1    return best_solutiondef schedule(jobs: List[Dict[str, int]]) -> List[int]:    return tabu_search(jobs)\n                                       ^^^^^^^^^^^^\nSyntaxError: invalid syntax\n",
+    "failure_reason": "syntax error \u2014 invalid Python syntax: invalid syntax",
+    "notes": "Fixed indentation and syntax errors in the previous code. (fixed after pre-test retry 1)",
+    "instance_scores": {},
+    "instance_errors": {
+      "20jobs_t0.4": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_q2gytnul\\agent_run.py\", line 27\n    iteration += 1    return best_solutiondef schedule(jobs: List[Dict[str, int]]) -> List[int]:    return tabu_search(jobs)\n                                       ^^^^^^^^^^^^\nSyntaxError: invalid syntax\n",
+      "50jobs_t0.6": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_afsb6pdq\\agent_run.py\", line 27\n    iteration += 1    return best_solutiondef schedule(jobs: List[Dict[str, int]]) -> List[int]:    return tabu_search(jobs)\n                                       ^^^^^^^^^^^^\nSyntaxError: invalid syntax\n",
+      "100jobs_t0.8": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_t2k2zv2s\\agent_run.py\", line 27\n    iteration += 1    return best_solutiondef schedule(jobs: List[Dict[str, int]]) -> List[int]:    return tabu_search(jobs)\n                                       ^^^^^^^^^^^^\nSyntaxError: invalid syntax\n"
+    }
+  }
+]

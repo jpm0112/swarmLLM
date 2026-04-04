@@ -1,0 +1,55 @@
+{
+  "record_type": "coordinator_decision",
+  "iteration": 1,
+  "analysis": null,
+  "assignments": [
+    {
+      "agent_id": 0,
+      "mode": "explore",
+      "direction": "Implement and benchmark basic dispatching rules including Earliest Due Date (EDD), Shortest Processing Time (SPT), and Modified Due Date (MDD) to establish a performance baseline.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 1,
+      "mode": "explore",
+      "direction": "Develop a Simulated Annealing (SA) metaheuristic using a swap-based neighborhood and a geometric cooling schedule, focusing on the transition from exploration to exploitation.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 2,
+      "mode": "explore",
+      "direction": "Implement a Genetic Algorithm (GA) using Order Crossover (OX) and swap mutation, with a focus on maintaining population diversity to avoid premature convergence.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 3,
+      "mode": "explore",
+      "direction": "Design a Variable Neighborhood Search (VNS) algorithm that cycles through swap, insertion, and 2-opt (reversal) neighborhoods to escape local minima.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 4,
+      "mode": "explore",
+      "direction": "Formulate an Integer Linear Programming (ILP) model using sequence-position variables and solve it using a standard solver for small-to-medium instances.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 5,
+      "mode": "explore",
+      "direction": "Develop a Constraint Programming (CP) approach utilizing interval variables and the 'noOverlap' constraint to efficiently prune the search space.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 6,
+      "mode": "explore",
+      "direction": "Implement a Tabu Search (TS) algorithm with a tabu list of recent job moves and an aspiration criterion to allow moves that improve the best-known solution.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 7,
+      "mode": "explore",
+      "direction": "Explore an Ant Colony Optimization (ACO) metaheuristic where pheromone levels represent the preference for scheduling specific jobs in specific sequence positions.",
+      "source_refs": []
+    }
+  ]
+}

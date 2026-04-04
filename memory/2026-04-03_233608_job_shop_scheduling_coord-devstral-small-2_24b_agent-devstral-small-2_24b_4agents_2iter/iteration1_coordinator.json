@@ -1,0 +1,31 @@
+{
+  "record_type": "coordinator_decision",
+  "iteration": 1,
+  "analysis": null,
+  "assignments": [
+    {
+      "agent_id": 0,
+      "mode": "explore",
+      "direction": "Implement a genetic algorithm with permutation-based encoding and local search operators to explore evolutionary approaches.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 1,
+      "mode": "explore",
+      "direction": "Develop a constraint programming model with global constraints and heuristic search to evaluate constraint satisfaction techniques.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 2,
+      "mode": "explore",
+      "direction": "Design a reinforcement learning agent using a neural network to learn scheduling policies through simulation.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 3,
+      "mode": "explore",
+      "direction": "Apply a greedy heuristic such as the shortest processing time (SPT) rule and compare its performance to random scheduling.",
+      "source_refs": []
+    }
+  ]
+}

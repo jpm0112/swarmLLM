@@ -1,0 +1,79 @@
+{
+  "record_type": "coordinator_decision",
+  "iteration": 4,
+  "analysis": "The swarm has converged on a performance plateau around an aggregate score of 17,400, with Iterated Local Search (ILS), Variable Neighborhood Search (VNS), and Tabu Search showing nearly identical results. The Modified Due Date (MDD) rule is firmly established as the superior initialization method. The primary bottleneck is the 100-job instance, where complex local searches (like Agent 0's VND) are timing out. Agent 2's 'critical job' focus (targeting tardy jobs) successfully reduced search space, while Agent 1's Tabu Search provided a systematic way to escape local optima. Population-based methods (GA, ACO) and constructive heuristics (Beam Search, SWO) are currently underperforming compared to trajectory-based metaheuristics.",
+  "assignments": [
+    {
+      "agent_id": 0,
+      "mode": "exploit",
+      "direction": "Refine the VND approach from Iteration 3 by implementing strict time management. Use a 'first-improvement' strategy and a time-budget check (e.g., stop local search after 100 seconds) to ensure completion on 100-job instances. Additionally, implement a 'delta-evaluation' for tardiness to speed up the neighborhood search instead of recomputing the entire schedule's tardiness for every move.",
+      "source_refs": [
+        {
+          "agent_id": 0,
+          "iteration": 3
+        }
+      ]
+    },
+    {
+      "agent_id": 1,
+      "mode": "exploit",
+      "direction": "Combine the Tabu Search from Agent 1 with the 'critical job' focus from Agent 2. Restrict the Tabu neighborhood to only include swaps or insertions involving jobs that are currently tardy or their immediate neighbors. This hybrid should allow for a deeper search in the most impactful areas of the schedule while maintaining the cycle-avoidance of Tabu Search.",
+      "source_refs": [
+        {
+          "agent_id": 1,
+          "iteration": 3
+        },
+        {
+          "agent_id": 2,
+          "iteration": 3
+        }
+      ]
+    },
+    {
+      "agent_id": 2,
+      "mode": "exploit",
+      "direction": "Enhance the VNS by replacing random shaking with a 'Ruin-and-Recreate' perturbation. When the search is stuck, remove a block of 4\u20136 contiguous jobs (prioritizing those with high tardiness) and re-insert them using a greedy MDD-based heuristic. This targeted diversification is more likely to find better regions than random swaps.",
+      "source_refs": [
+        {
+          "agent_id": 2,
+          "iteration": 3
+        }
+      ]
+    },
+    {
+      "agent_id": 3,
+      "mode": "exploit",
+      "direction": "Implement Late Acceptance Hill Climbing (LAHC) as the local search metaheuristic. LAHC is more efficient than Simulated Annealing and less prone to getting stuck than basic hill climbing. Use the MDD rule for initialization and a list size of 50\u2013100 for the 'late acceptance' history. Focus on insertion moves as the primary neighborhood.",
+      "source_refs": [
+        {
+          "agent_id": 3,
+          "iteration": 3
+        }
+      ]
+    },
+    {
+      "agent_id": 4,
+      "mode": "explore",
+      "direction": "Implement Large Neighborhood Search (LNS). In each iteration, 'destroy' a significant portion of the schedule (e.g., 20% of jobs) using various operators (random, worst-tardiness, or relatedness-based) and 'repair' the schedule using a fast greedy insertion heuristic. This approach is often superior to small-step local searches for complex scheduling problems.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 5,
+      "mode": "explore",
+      "direction": "Implement the Iterated Greedy (IG) metaheuristic. IG consists of two main phases: destruction (removing $k$ random jobs) and construction (re-inserting them into the best possible positions one by one). Use a simple local search after the construction phase and an acceptance criterion similar to Simulated Annealing to decide whether to keep the new solution.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 6,
+      "mode": "explore",
+      "direction": "Develop a Memetic Algorithm that combines the Genetic Algorithm from Agent 4 with a short-duration local search (hill climbing) applied to every offspring. Use MDD to seed a portion of the population and employ a 'crowding' mechanism or fitness sharing to maintain population diversity and prevent premature convergence.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 7,
+      "mode": "explore",
+      "direction": "Explore a Discrete Differential Evolution (DE) algorithm tailored for permutations. Use a scheme like DE/rand/1/bin where the difference between two permutations is converted into a series of swap moves applied to a third individual. Use a 'relative position indexing' or 'random keys' approach to map continuous vectors to job sequences.",
+      "source_refs": []
+    }
+  ]
+}

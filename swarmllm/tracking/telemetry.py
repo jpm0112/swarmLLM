@@ -442,8 +442,8 @@ class DashboardRenderer:
                 f"[bold green]Agents[/] queued={counts['queued']} "
                 f"running={counts['running']} done={counts['done']} failed={counts['failed']}"
             ),
-            f"[bold magenta]Best[/] {state.best_score if state.best_score is not None else 'n/a'}",
-            f"[bold yellow]Gap[/] {gap_text}",
+            f"[bold magenta]Best Score[/] {state.best_score if state.best_score is not None else 'n/a'}",
+            f"[bold yellow]Gap to Optimum[/] {gap_text}",
             (
                 f"[bold blue]Tokens[/] {state.total_tokens:,}  "
                 f"[bold blue]TPS[/] {state.throughput.rolling_tps:.1f} rolling / "
@@ -823,7 +823,7 @@ class RunTelemetry:
         )
         self.state.processes[os.getpid()] = ProcessState(
             pid=os.getpid(),
-            label="swarmllm main",
+            label="orchestrator",
             kind="python",
             role="main",
             metadata={"path": sys.executable},

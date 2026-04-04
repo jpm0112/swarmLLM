@@ -1,0 +1,41 @@
+record_type: coordinator_decision
+iteration: 3
+analysis: "The CP‑SAT based Large Neighborhood Search (Agent 4) achieved the highest aggregate score, while the hybrid Simulated Annealing (Agent 5) and refined MILP with CP warm‑start (Agent 0) also performed well. All meta‑heuristic variants (GA, tabu, RL, beam, priority) failed due to implementation bugs or insufficient exploitation of CP information. Future work should (1) deepen the CP‑SAT foundation, (2) add stronger adaptive large‑neighbourhood or meta‑heuristic layers, and (3) explore fundamentally new paradigms such as Ant‑Colony construction, Benders decomposition, and GPU‑parallel local search. The plan below assigns four agents to exploit the best existing results and four agents to explore new promising directions."
+assignments[8]:
+  - agent_id: 0
+    mode: exploit
+    direction: "Create an Adaptive LNS‑SA hybrid: start from the CP‑SAT solution, run a Large Neighborhood Search that periodically applies critical‑path swaps annealed with a temperature schedule, accepting moves that improve makespan or with SA probability. This merges the strengths of Agent 4 (LNS) and Agent 5 (SA)."
+    source_refs[2,]{agent_id,iteration}:
+      4,2
+      5,2
+  - agent_id: 1
+    mode: exploit
+    direction: "Enhance the refined MILP (Agent 0) by adding CP‑SAT derived feasibility cuts: after obtaining the CP warm‑start, generate nogood cuts for infeasible start‑time combinations and inject them as lazy constraints in the MILP model, tightening the formulation further."
+    source_refs[1,]{agent_id,iteration}:
+      0,2
+  - agent_id: 2
+    mode: exploit
+    direction: Repair and strengthen the memetic GA approach (Agent 1) by fixing precedence handling and using the CP‑SAT solution as the initial population. Add a deterministic elitism step and a fast 2‑opt local search on each offspring.
+    source_refs[1,]{agent_id,iteration}:
+      1,2
+  - agent_id: 3
+    mode: exploit
+    direction: "Combine the beam‑search framework (Agent 6) with CP‑SAT warm‑start: initialise the beam with the CP solution and expand nodes using a priority function derived from CP variable activity, keeping feasibility checks tight. This leverages the successful CP foundation while improving the beam expansion logic."
+    source_refs[1,]{agent_id,iteration}:
+      6,2
+  - agent_id: 4
+    mode: explore
+    direction: "Develop an Ant Colony Optimization (ACO) constructive heuristic for job‑shop scheduling that builds a dispatch order guided by pheromone trails updated from the best CP‑SAT makespan. After constructing a schedule, apply a quick local repair to enforce feasibility."
+    source_refs[0]:
+  - agent_id: 5
+    mode: explore
+    direction: "Implement Adaptive Large Neighborhood Search (ALNS) with machine‑based removal: randomly select a subset of operations on the most loaded machines, re‑optimise them using a fast CP‑SAT sub‑model, and adapt removal probabilities based on observed improvement."
+    source_refs[0]:
+  - agent_id: 6
+    mode: explore
+    direction: "Apply Benders decomposition: the master problem decides the order of operations on each machine (binary sequencing variables); the sub‑problem solves the resulting job‑shop schedule with CP‑SAT to verify feasibility and provide optimal makespan cuts back to the master."
+    source_refs[0]:
+  - agent_id: 7
+    mode: explore
+    direction: Design a GPU‑accelerated parallel local search that runs many independent 2‑opt or critical‑path swap moves concurrently (using Numba/CUDA). Periodically synchronize to keep the best solution and feed it as a warm‑start to the CP‑SAT solver.
+    source_refs[0]:

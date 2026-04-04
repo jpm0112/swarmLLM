@@ -1,0 +1,25 @@
+name = "together-cloud"
+kind = "together"
+request_timeout = 300
+default_max_concurrent_agents = 5
+
+[coordinator]
+model = "Qwen/Qwen2.5-Coder-32B-Instruct"
+temperature = 0.4
+max_tokens = 4096
+
+[worker]
+model = "Qwen/Qwen2.5-Coder-32B-Instruct"
+temperature = 1.0
+max_tokens = 4096
+
+[[coordinator_endpoints]]
+label = "together-cloud"
+base_url = "https://api.together.xyz/v1"
+api_key_env = "TOGETHER_API_KEY"
+
+[[worker_endpoints]]
+label = "together-cloud"
+base_url = "https://api.together.xyz/v1"
+api_key_env = "TOGETHER_API_KEY"
+weight = 1

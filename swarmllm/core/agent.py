@@ -195,7 +195,7 @@ Write a general algorithm — do not hardcode for a specific instance.
         telemetry=telemetry,
         agent_id=agent_id,
         iteration=iteration,
-        process_label=f"agent {agent_id} precheck",
+        process_label=f"agent_{agent_id} sandbox precheck",
     )
 
     for retry in range(config.swarm.agent_retries):
@@ -276,7 +276,7 @@ Write a general algorithm — do not hardcode for a specific instance.
             telemetry=telemetry,
             agent_id=agent_id,
             iteration=iteration,
-            process_label=f"agent {agent_id} precheck",
+            process_label=f"agent_{agent_id} sandbox precheck",
         )
 
     # Full evaluation across all instances
@@ -311,7 +311,7 @@ Write a general algorithm — do not hardcode for a specific instance.
             config.sandbox,
             function_name=function_name,
             telemetry=telemetry,
-            process_label=f"agent {agent_id} {inst_name}",
+            process_label=f"agent_{agent_id} sandbox {inst_name}",
             process_metadata={"agent_id": agent_id, "iteration": iteration, "instance": inst_name},
         )
         if not exec_result["success"]:
@@ -439,7 +439,7 @@ async def _validate_generated_code(
         config.sandbox,
         function_name=function_name,
         telemetry=telemetry,
-        process_label=process_label or f"agent {agent_id} precheck",
+        process_label=process_label or f"agent_{agent_id} sandbox precheck",
         process_metadata={"agent_id": agent_id, "iteration": iteration, "stage": "precheck"},
     )
     if not pre_result["success"]:

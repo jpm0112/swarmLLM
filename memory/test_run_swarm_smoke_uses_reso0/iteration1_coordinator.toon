@@ -1,0 +1,8 @@
+record_type: coordinator_decision
+iteration: 1
+analysis: null
+assignments[1]:
+  - agent_id: 0
+    mode: explore
+    direction: Try FIFO as a sanity check
+    source_refs[0]:

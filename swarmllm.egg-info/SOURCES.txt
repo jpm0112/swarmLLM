@@ -29,12 +29,15 @@ swarmllm/problems/job_shop_scheduling/prompts.py
 swarmllm/sandbox/__init__.py
 swarmllm/sandbox/executor.py
 swarmllm/tracking/__init__.py
+swarmllm/tracking/attempt_memory.py
 swarmllm/tracking/prompt_logger.py
 swarmllm/tracking/shared_log.py
 swarmllm/tracking/telemetry.py
 swarmllm/tracking/token_tracker.py
+tests/test_attempt_memory.py
 tests/test_config.py
 tests/test_coordinator_prompt.py
+tests/test_exploit_context.py
 tests/test_llm_health.py
 tests/test_llm_profiles.py
 tests/test_llm_routing.py

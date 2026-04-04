@@ -1,0 +1,31 @@
+{
+  "record_type": "coordinator_decision",
+  "iteration": 1,
+  "analysis": null,
+  "assignments": [
+    {
+      "agent_id": 0,
+      "mode": "explore",
+      "direction": "Implement a Genetic Algorithm with tournament selection and uniform crossover.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 1,
+      "mode": "explore",
+      "direction": "Apply a Simulated Annealing approach with exponential cooling schedule.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 2,
+      "mode": "explore",
+      "direction": "Use an Ant Colony Optimization method with pheromone evaporation rate of 0.5.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 3,
+      "mode": "explore",
+      "direction": "Develop a Particle Swarm Optimization technique with inertia weight of 0.7.",
+      "source_refs": []
+    }
+  ]
+}

@@ -38,7 +38,7 @@ def execute_agent_code(
     Returns:
         dict with keys: success, result, error, stdout
     """
-    runner_code = _build_runner(code, input_data, config.blocked_imports, function_name)
+    runner_code = _build_runner(code, input_data, config.blocked_imports, function_name, config.timeout)
 
     # Write to temp file and execute in subprocess
     tmp_dir = tempfile.mkdtemp(prefix="swarmllm_")
@@ -53,7 +53,7 @@ def execute_agent_code(
             cwd=tmp_dir,
             timeout=config.timeout,
             telemetry=telemetry,
-            label=process_label or "sandbox python",
+            label=process_label or "sandbox",
             metadata=process_metadata,
         )
 
@@ -76,7 +76,7 @@ def execute_agent_code(
                         cwd=tmp_dir,
                         timeout=config.timeout,
                         telemetry=telemetry,
-                        label=process_label or "sandbox python",
+                        label=process_label or "sandbox",
                         metadata=process_metadata,
                     )
 
@@ -214,7 +214,7 @@ def _run_subprocess(
 
 
 def _build_runner(agent_code: str, input_data: list[dict], blocked_imports: list[str],
-                   function_name: str = "schedule") -> str:
+                   function_name: str = "schedule", timeout: int = 120) -> str:
     """Build the full runner script that wraps agent code."""
     blocked_check = ", ".join(f'"{m}"' for m in blocked_imports)
     input_data_json = json.dumps(input_data)
@@ -223,6 +223,11 @@ def _build_runner(agent_code: str, input_data: list[dict], blocked_imports: list
     # Agent code runs at top level (defines the function),
     # then we call it inside a try/except.
     header = f"""import json
+import time
+
+# Time budget for agent code — use these to return early with best-so-far.
+TIMEOUT_SEC = {timeout}
+_START_TIME = time.time()
 
 # Restrict dangerous imports (only at top level, not internal library imports)
 BLOCKED = set([{blocked_check}])
@@ -254,7 +259,8 @@ try:
     result = {function_name}(input_data)
     if not isinstance(result, list):
         result = list(result)
-    result = [int(x) for x in result]
+    if result and isinstance(result[0], (int, float)):
+        result = [int(x) for x in result]
     print(json.dumps({{"success": True, "result": result}}))
 except Exception as e:
     print(json.dumps({{"success": False, "error": f"{{type(e).__name__}}: {{str(e)}}"}}))\n"""

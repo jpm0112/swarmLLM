@@ -1,0 +1,114 @@
+[
+  {
+    "record_type": "agent_attempt",
+    "iteration": 2,
+    "agent_id": 0,
+    "mode": "exploit",
+    "direction": "Refine the genetic algorithm by incorporating more advanced selection methods, such as roulette wheel selection or tournament selection with a varying tournament size, and investigate the impact of different mutation rates on the algorithm's performance.",
+    "source_refs": [
+      {
+        "agent_id": 0,
+        "iteration": 1
+      }
+    ],
+    "approach": "Genetic algorithm with roulette wheel selection and adaptive mutation rate for job scheduling",
+    "code": "import random\nimport numpy as np\ndef schedule(jobs: list[dict]) -> list[int]:\n    population_size = 100\n    generations = 100\n    initial_mutation_rate = 0.1\n    min_mutation_rate = 0.01\n    max_mutation_rate = 0.2\n    population = [random.sample([job['id'] for job in jobs], len(jobs)) for _ in range(population_size)]\n    \n    for _ in range(generations):\n        tardiness = []\n        for permutation in population:\n            completion_time = 0\n            tardiness_per_permutation = 0\n            for job_id in permutation:\n                job = next(job for job in jobs if job['id'] == job_id)\n                completion_time += job['processing_time']\n                tardiness_per_permutation += max(0, completion_time - job['due_date'])\n            tardiness.append(tardiness_per_permutation)\n        \n        mutation_rate = initial_mutation_rate - (initial_mutation_rate - min_mutation_rate) * _ / generations\n        mutation_rate = max(min_mutation_rate, min(max_mutation_rate, mutation_rate))\n        \n        parents = []\n        total_tardiness = sum(tardiness)\n        probabilities = [(1 - x / total_tardiness) for x in tardiness]\n        probabilities = [x / sum(probabilities) for x in probabilities]\n        \n        for _ in range(population_size):\n            idx = np.random.choice(range(population_size), p=probabilities)\n            parents.append(population[idx])\n        \n        offspring = []\n        for _ in range(population_size):\n            parent1, parent2 = random.sample(parents, 2)\n            crossover_point = random.randint(1, len(jobs) - 1)\n            child = parent1[:crossover_point] + [job for job in parent2 if job not in parent1[:crossover_point]]\n            offspring.append(child)\n        \n        for i in range(population_size):\n            if random.random() < mutation_rate:\n                idx1, idx2 = random.sample(range(len(jobs)), 2)\n                offspring[i][idx1], offspring[i][idx2] = offspring[i][idx2], offspring[i][idx1]\n        \n        population = offspring\n    \n    tardiness = []\n    for permutation in population:\n        completion_time = 0\n        tardiness_per_permutation = 0\n        for job_id in permutation:\n            job = next(job for job in jobs if job['id'] == job_id)\n            completion_time += job['processing_time']\n            tardiness_per_permutation += max(0, completion_time - job['due_date'])\n        tardiness.append(tardiness_per_permutation)\n    \n    return population[np.argmin(tardiness)]",
+    "score": 44540,
+    "success": true,
+    "error": null,
+    "failure_reason": null,
+    "notes": "Aggregate=44540 | 100jobs_t0.8=37856 | 20jobs_t0.4=942 | 50jobs_t0.6=5742 | The genetic algorithm now uses roulette wheel selection with an adaptive mutation rate, which decreases over generations to prevent premature convergence. This should improve the algorithm's performance on the job scheduling problem instances.",
+    "instance_scores": {
+      "20jobs_t0.4": 942,
+      "50jobs_t0.6": 5742,
+      "100jobs_t0.8": 37856
+    },
+    "instance_errors": {}
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 2,
+    "agent_id": 1,
+    "mode": "explore",
+    "direction": "Investigate the application of machine learning techniques, such as reinforcement learning or deep learning, to the job scheduling problem, and explore how these methods can be used to learn effective scheduling policies from data.",
+    "source_refs": [],
+    "approach": "Earliest Due Date (EDD) heuristic",
+    "code": "def schedule(jobs: list[dict]) -> list[int]:\n    # Sort jobs by due date\n    sorted_jobs = sorted(jobs, key=lambda job: job['due_date'])\n    \n    # Extract job IDs from sorted jobs\n    job_ids = [job['id'] for job in sorted_jobs]\n    \n    return job_ids",
+    "score": 26271,
+    "success": true,
+    "error": null,
+    "failure_reason": null,
+    "notes": "Aggregate=26271 | 100jobs_t0.8=19659 | 20jobs_t0.4=995 | 50jobs_t0.6=5617 | The EDD heuristic is a simple and effective method for scheduling jobs to minimize total tardiness. It works by sorting jobs by their due dates and scheduling them in that order. This approach prioritizes jobs with earlier due dates, which helps to reduce the total tardiness.",
+    "instance_scores": {
+      "20jobs_t0.4": 995,
+      "50jobs_t0.6": 5617,
+      "100jobs_t0.8": 19659
+    },
+    "instance_errors": {}
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 2,
+    "agent_id": 2,
+    "mode": "exploit",
+    "direction": "Build on the simulated annealing approach by experimenting with different cooling schedules, such as linear or geometric cooling, and investigate the impact of the initial temperature and the number of iterations on the algorithm's performance.",
+    "source_refs": [
+      {
+        "agent_id": 2,
+        "iteration": 1
+      }
+    ],
+    "approach": "Failed to get LLM response",
+    "code": "",
+    "score": null,
+    "success": false,
+    "error": "LLM error (ModelHTTPError): status_code: 429, model_name: llama-3.3-70b-versatile, body: {'message': 'Rate limit reached for model `llama-3.3-70b-versatile` in organization `org_01kn2y93wbf93rw614nrfc3bek` service tier `on_demand` on tokens per day (TPD): Limit 100000, Used 98568, Requested 3733. Please try again in 33m8.063999999s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}",
+    "failure_reason": "LLM unreachable \u2014 could not get a response from the model",
+    "notes": "",
+    "instance_scores": {},
+    "instance_errors": {}
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 2,
+    "agent_id": 3,
+    "mode": "explore",
+    "direction": "Examine the use of constraint programming techniques, such as constraint propagation or branch and bound, to solve the job scheduling problem, and investigate how these methods can be used to improve the efficiency and effectiveness of the scheduling process.",
+    "source_refs": [],
+    "approach": "Failed to get LLM response",
+    "code": "",
+    "score": null,
+    "success": false,
+    "error": "LLM error (ModelHTTPError): status_code: 429, model_name: llama-3.3-70b-versatile, body: {'message': 'Rate limit reached for model `llama-3.3-70b-versatile` in organization `org_01kn2y93wbf93rw614nrfc3bek` service tier `on_demand` on tokens per day (TPD): Limit 100000, Used 98568, Requested 1642. Please try again in 3m1.44s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}",
+    "failure_reason": "LLM unreachable \u2014 could not get a response from the model",
+    "notes": "",
+    "instance_scores": {},
+    "instance_errors": {}
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 2,
+    "agent_id": 4,
+    "mode": "exploit",
+    "direction": "Combine the particle swarm optimization approach with other methods, such as genetic algorithms or simulated annealing, to create a hybrid algorithm that leverages the strengths of each approach, and investigate the impact of different parameter settings on the algorithm's performance.",
+    "source_refs": [
+      {
+        "agent_id": 4,
+        "iteration": 1
+      },
+      {
+        "agent_id": 0,
+        "iteration": 1
+      }
+    ],
+    "approach": "Failed to get LLM response",
+    "code": "",
+    "score": null,
+    "success": false,
+    "error": "LLM error (ModelHTTPError): status_code: 429, model_name: llama-3.3-70b-versatile, body: {'message': 'Rate limit reached for model `llama-3.3-70b-versatile` in organization `org_01kn2y93wbf93rw614nrfc3bek` service tier `on_demand` on tokens per day (TPD): Limit 100000, Used 98568, Requested 3104. Please try again in 24m4.608s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing', 'type': 'tokens', 'code': 'rate_limit_exceeded'}",
+    "failure_reason": "LLM unreachable \u2014 could not get a response from the model",
+    "notes": "",
+    "instance_scores": {},
+    "instance_errors": {}
+  }
+]

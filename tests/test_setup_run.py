@@ -12,15 +12,15 @@ from scripts.setup_run import (
 
 
 def test_supported_backends_for_windows():
-    assert supported_backends_for_platform("Windows", "AMD64") == ["ollama", "ollama-cloud"]
+    assert supported_backends_for_platform("Windows", "AMD64") == ["ollama", "ollama-cloud", "groq", "together", "vllm"]
 
 
 def test_supported_backends_for_apple_silicon():
-    assert supported_backends_for_platform("Darwin", "arm64") == ["ollama", "ollama-cloud", "vllm-metal", "mlx-lm"]
+    assert supported_backends_for_platform("Darwin", "arm64") == ["ollama", "ollama-cloud", "groq", "together", "vllm-metal", "mlx-lm"]
 
 
 def test_supported_backends_for_linux():
-    assert supported_backends_for_platform("Linux", "x86_64") == ["ollama", "ollama-cloud", "vllm"]
+    assert supported_backends_for_platform("Linux", "x86_64") == ["ollama", "ollama-cloud", "groq", "together", "vllm"]
 
 
 def test_choose_ollama_models_from_available_list(monkeypatch):

@@ -1,0 +1,75 @@
+{
+  "record_type": "coordinator_decision",
+  "iteration": 2,
+  "analysis": "Dispatching heuristics (Agent 1) achieved the best score, showing robustness across instances. Branch and bound (Agent 0) succeeded but with higher makespan. All metaheuristic and learning-based approaches failed due to implementation errors (wrong machine assignments, timeouts, or value errors), indicating need for careful constraint handling. Unexplored areas include constraint programming, linear relaxations, beam search, and properly integrated hybrid methods.",
+  "assignments": [
+    {
+      "agent_id": 0,
+      "mode": "exploit",
+      "direction": "Refine branch and bound by using dispatching heuristics to generate initial upper bounds and prune more aggressively with improved lower bounds incorporating job release times.",
+      "source_refs": [
+        {
+          "agent_id": 0,
+          "iteration": 1
+        }
+      ]
+    },
+    {
+      "agent_id": 1,
+      "mode": "exploit",
+      "direction": "Extend dispatching heuristics with multiple priority rules (e.g., SPT, LPT, MWKR) and adaptive rule selection based on real-time machine loads and job remaining times.",
+      "source_refs": [
+        {
+          "agent_id": 1,
+          "iteration": 1
+        }
+      ]
+    },
+    {
+      "agent_id": 2,
+      "mode": "explore",
+      "direction": "Implement simulated annealing with machine-centric neighborhood moves, where operations are reassigned to different time slots on the same machine to reduce idle time, using an adaptive cooling schedule.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 3,
+      "mode": "explore",
+      "direction": "Design a genetic algorithm with a priority rule-based encoding: chromosomes specify sequences of dispatching rules to apply during schedule construction, with crossover and mutation on rule order.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 4,
+      "mode": "exploit",
+      "direction": "Apply tabu search to locally improve the schedule from dispatching heuristics, using swap moves on critical operations and a tabu list that prevents cycling.",
+      "source_refs": [
+        {
+          "agent_id": 1,
+          "iteration": 1
+        }
+      ]
+    },
+    {
+      "agent_id": 5,
+      "mode": "explore",
+      "direction": "Investigate ant colony optimization with pheromone trails on operation-machine assignments, leveraging heuristic information based on operation durations and current machine congestion.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 6,
+      "mode": "explore",
+      "direction": "Explore a reinforcement learning approach with a compact state representation (job progress, machine busy times) and a policy network to select next operations, trained via policy gradient.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 7,
+      "mode": "exploit",
+      "direction": "Develop a hybrid method that initializes with dispatching heuristics and iteratively applies local search with operation insertion moves, using a hill-climbing strategy with random restarts.",
+      "source_refs": [
+        {
+          "agent_id": 1,
+          "iteration": 1
+        }
+      ]
+    }
+  ]
+}

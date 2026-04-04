@@ -1,0 +1,31 @@
+{
+  "record_type": "coordinator_decision",
+  "iteration": 1,
+  "analysis": null,
+  "assignments": [
+    {
+      "agent_id": 0,
+      "mode": "explore",
+      "direction": "Implement a genetic algorithm for job scheduling.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 1,
+      "mode": "explore",
+      "direction": "Apply simulated annealing to minimize tardiness in job scheduling.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 2,
+      "mode": "explore",
+      "direction": "Utilize ant colony optimization techniques for scheduling jobs.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 3,
+      "mode": "explore",
+      "direction": "Experiment with particle swarm optimization to find optimal job schedules.",
+      "source_refs": []
+    }
+  ]
+}

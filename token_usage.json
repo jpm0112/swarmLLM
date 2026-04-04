@@ -1,20 +1,20 @@
 {
   "summary": {
-    "total_prompt_tokens": 18005,
-    "total_completion_tokens": 3248,
+    "total_prompt_tokens": 16075,
+    "total_completion_tokens": 3992,
     "total_thinking_tokens": 0,
-    "total_tokens": 21253,
-    "agent_tokens": 20619,
+    "total_tokens": 20067,
+    "agent_tokens": 19413,
     "agent_thinking_tokens": 0,
-    "coordinator_tokens": 634,
+    "coordinator_tokens": 654,
     "coordinator_thinking_tokens": 0,
     "total_calls": 2
   },
   "per_iteration": {
     "1": {
-      "prompt_tokens": 18005,
-      "completion_tokens": 3248,
-      "total_tokens": 21253,
+      "prompt_tokens": 16075,
+      "completion_tokens": 3992,
+      "total_tokens": 20067,
       "thinking_tokens": 0,
       "agent_calls": 1,
       "coordinator_calls": 1
@@ -26,22 +26,22 @@
       "iteration": 1,
       "agent_id": null,
       "model": "qwen2.5-coder:14b",
-      "prompt_tokens": 547,
-      "completion_tokens": 87,
-      "total_tokens": 634,
+      "prompt_tokens": 548,
+      "completion_tokens": 106,
+      "total_tokens": 654,
       "thinking_tokens": 0,
-      "duration_seconds": 13.898436784744263
+      "duration_seconds": 58.80036973953247
     },
     {
       "role": "agent",
       "iteration": 1,
       "agent_id": 0,
       "model": "qwen2.5-coder:14b",
-      "prompt_tokens": 17458,
-      "completion_tokens": 3161,
-      "total_tokens": 20619,
+      "prompt_tokens": 15527,
+      "completion_tokens": 3886,
+      "total_tokens": 19413,
       "thinking_tokens": 0,
-      "duration_seconds": 0.0
+      "duration_seconds": 712.0585885047913
     }
   ]
 }

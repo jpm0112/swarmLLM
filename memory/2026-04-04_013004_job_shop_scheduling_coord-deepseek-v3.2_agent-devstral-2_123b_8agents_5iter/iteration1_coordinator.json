@@ -1,0 +1,55 @@
+{
+  "record_type": "coordinator_decision",
+  "iteration": 1,
+  "analysis": null,
+  "assignments": [
+    {
+      "agent_id": 0,
+      "mode": "explore",
+      "direction": "Implement a branch and bound algorithm with depth-first search and lower bounds based on machine workloads and job remaining times.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 1,
+      "mode": "explore",
+      "direction": "Explore dispatching heuristics (e.g., Shortest Processing Time, Most Work Remaining) and evaluate their makespan performance on standard benchmarks.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 2,
+      "mode": "explore",
+      "direction": "Develop a simulated annealing approach with a geometric cooling schedule and neighborhood moves that swap operations on critical paths.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 3,
+      "mode": "explore",
+      "direction": "Design a genetic algorithm using a permutation-based representation for operations, with order crossover and shift mutation operators.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 4,
+      "mode": "explore",
+      "direction": "Investigate tabu search with a short-term memory tabu list and neighborhood structures focused on inserting operations into new positions.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 5,
+      "mode": "explore",
+      "direction": "Apply ant colony optimization, defining pheromone trails on operation sequences and updating based on makespan of constructed schedules.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 6,
+      "mode": "explore",
+      "direction": "Explore a reinforcement learning agent using Q-learning, with states representing job completion status and actions selecting next operations.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 7,
+      "mode": "explore",
+      "direction": "Create a hybrid method that initializes schedules with dispatching rules and refines them using iterative local search with swap moves.",
+      "source_refs": []
+    }
+  ]
+}

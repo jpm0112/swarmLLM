@@ -1,0 +1,25 @@
+{
+  "record_type": "coordinator_decision",
+  "iteration": 1,
+  "analysis": null,
+  "assignments": [
+    {
+      "agent_id": 0,
+      "mode": "explore",
+      "direction": "Implement and test a genetic algorithm for job scheduling, focusing on representation schemes like priority-based encoding and selection mechanisms such as tournament selection.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 1,
+      "mode": "explore",
+      "direction": "Implement and test a reinforcement learning approach using Q-learning or Deep Q-Networks (DQN) to learn job sequencing policies for minimizing total tardiness.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 2,
+      "mode": "explore",
+      "direction": "Implement and test a hybrid approach combining simulated annealing with local search heuristics, specifically exploring how perturbation strategies can escape local optima in job scheduling.",
+      "source_refs": []
+    }
+  ]
+}

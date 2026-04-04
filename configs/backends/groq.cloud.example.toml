@@ -1,0 +1,25 @@
+name = "groq-cloud"
+kind = "groq"
+request_timeout = 300
+default_max_concurrent_agents = 1
+
+[coordinator]
+model = "llama-3.3-70b-versatile"
+temperature = 0.4
+max_tokens = 2048
+
+[worker]
+model = "llama-3.3-70b-versatile"
+temperature = 1.0
+max_tokens = 2048
+
+[[coordinator_endpoints]]
+label = "groq-cloud"
+base_url = "https://api.groq.com/openai/v1"
+api_key_env = "GROQ_API_KEY"
+
+[[worker_endpoints]]
+label = "groq-cloud"
+base_url = "https://api.groq.com/openai/v1"
+api_key_env = "GROQ_API_KEY"
+weight = 1

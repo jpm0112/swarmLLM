@@ -1,0 +1,55 @@
+{
+  "record_type": "coordinator_decision",
+  "iteration": 1,
+  "analysis": null,
+  "assignments": [
+    {
+      "agent_id": 0,
+      "mode": "explore",
+      "direction": "Implement a Constraint Programming (CP) model using OR-Tools with interval variables and cumulative constraints, focusing on the 'NoOverlap' constraint for machine resources.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 1,
+      "mode": "explore",
+      "direction": "Develop a Genetic Algorithm using a permutation-with-repetition encoding and Precedence Preservative Crossover (PPX) to maintain job order validity.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 2,
+      "mode": "explore",
+      "direction": "Implement a Tabu Search algorithm utilizing the Nowicki-Smutnicki (N5) neighborhood structure, which focuses on swapping adjacent operations on the critical path.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 3,
+      "mode": "explore",
+      "direction": "Apply the Giffler-Thompson algorithm to generate active schedules, testing various priority rules like Shortest Processing Time (SPT) and Most Work Remaining (MWKR).",
+      "source_refs": []
+    },
+    {
+      "agent_id": 4,
+      "mode": "explore",
+      "direction": "Implement a Simulated Annealing approach using a geometric cooling schedule and a move operator that shifts an operation to a different position within its valid range on a machine.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 5,
+      "mode": "explore",
+      "direction": "Develop an Ant Colony Optimization (ACO) metaheuristic where pheromone trails are deposited on the edges representing the sequence of operations on each machine.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 6,
+      "mode": "explore",
+      "direction": "Formulate and solve a Mixed-Integer Linear Programming (MILP) model using the Manne disjunctive formulation to establish exact lower bounds for small instances.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 7,
+      "mode": "explore",
+      "direction": "Implement a Shifting Bottleneck Heuristic (SBH) that iteratively solves single-machine scheduling subproblems to sequence the most constrained machines first.",
+      "source_refs": []
+    }
+  ]
+}

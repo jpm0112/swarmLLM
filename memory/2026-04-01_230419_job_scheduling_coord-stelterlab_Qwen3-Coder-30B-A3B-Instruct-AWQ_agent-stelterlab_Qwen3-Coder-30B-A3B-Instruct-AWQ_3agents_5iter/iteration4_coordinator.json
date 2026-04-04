@@ -1,0 +1,30 @@
+{
+  "record_type": "coordinator_decision",
+  "iteration": 4,
+  "analysis": "The previous iteration suffered from syntax and indentation errors in all three agents, primarily due to malformed code generation. Agent 0's priority rule heuristic was conceptually sound but had indentation issues. Agent 1's 2-opt local search with SPT heuristic also had syntax problems. Agent 2's shortest job-first with due date ordering failed similarly. None of these agents produced functional solutions. For iteration 4, we should explore a fundamentally different approach to diversify the search space, while exploiting the best-performing heuristics from the prior iteration.",
+  "assignments": [
+    {
+      "agent_id": 0,
+      "mode": "explore",
+      "direction": "Implement a hybrid metaheuristic combining simulated annealing with a job sequencing heuristic to minimize total tardiness. The approach should dynamically adjust temperature and neighbor selection based on job characteristics.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 1,
+      "mode": "exploit",
+      "direction": "Refine the 2-opt local search implementation from Agent 1, ensuring correct syntax and integrating it with the SPT heuristic to enhance schedule quality. Use the best-performing agent from the last iteration as a starting point.",
+      "source_refs": [
+        {
+          "agent_id": 1,
+          "iteration": 3
+        }
+      ]
+    },
+    {
+      "agent_id": 2,
+      "mode": "explore",
+      "direction": "Try the opposite of what has been working to preserve diversity",
+      "source_refs": []
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "record_type": "coordinator_decision",
+  "iteration": 1,
+  "analysis": null,
+  "assignments": [
+    {
+      "agent_id": 0,
+      "mode": "explore",
+      "direction": "Implement a genetic algorithm to optimize job scheduling by evolving solutions over generations.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 1,
+      "mode": "explore",
+      "direction": "Develop a simulated annealing approach to minimize total tardiness by allowing occasional worsening of solutions to escape local optima.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 2,
+      "mode": "explore",
+      "direction": "Use a particle swarm optimization algorithm to explore the solution space by simulating social behavior among particles.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 3,
+      "mode": "explore",
+      "direction": "Apply a tabu search method to systematically explore the solution space while avoiding previously visited solutions.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 4,
+      "mode": "explore",
+      "direction": "Implement a constraint programming approach to solve the job scheduling problem by defining constraints and searching for feasible solutions.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 5,
+      "mode": "explore",
+      "direction": "Use a local search heuristic to iteratively improve the solution by making small changes to the current schedule.",
+      "source_refs": []
+    }
+  ]
+}

@@ -1,0 +1,86 @@
+[
+  {
+    "record_type": "agent_attempt",
+    "iteration": 2,
+    "agent_id": 0,
+    "mode": "explore",
+    "direction": "Implement a Simulated Annealing algorithm for job scheduling, focusing on cooling schedules and neighborhood transitions to escape local optima. This builds on the failed attempt in iteration 1 but with improved robustness in code generation.",
+    "source_refs": [],
+    "approach": "Implement a Simulated Annealing algorithm for job scheduling with adaptive cooling and random neighborhood transitions to minimize total tardiness",
+    "code": "import random import math def schedule(jobs):     if not jobs:         return []      # Helper function to calculate total tardiness     def calculate_total_tardiness(schedule_order):         total_tardiness = 0         completion_time = 0         for job_id in schedule_order:             job = next(job for job in jobs if job['id'] == job_id)             completion_time += job['processing_time']             tardiness = max(0, completion_time - job['due_date'])             total_tardiness += tardiness         return total_tardiness      # Initial random schedule     current_schedule = list(range(len(jobs)))     random.shuffle(current_schedule)     current_tardiness = calculate_total_tardiness(current_schedule)      # Simulated Annealing parameters     initial_temp = 1000.0     cooling_rate = 0.95     min_temp = 1e-8     max_iterations = 10000     iteration = 0      # Track best solution     best_schedule = current_schedule[:]     best_tardiness = current_tardiness      # Simulated Annealing loop     temperature = initial_temp     while temperature > min_temp and iteration < max_iterations:         # Generate a neighbor by swapping two random jobs         neighbor_schedule = current_schedule[:]         i, j = random.sample(range(len(neighbor_schedule)), 2)         neighbor_schedule[i], neighbor_schedule[j] = neighbor_schedule[j], neighbor_schedule[i]          # Calculate neighbor's tardiness         neighbor_tardiness = calculate_total_tardiness(neighbor_schedule)          # Accept or reject the neighbor         delta = neighbor_tardiness - current_tardiness         if delta < 0 or random.random() < math.exp(-delta / temperature):             current_schedule = neighbor_schedule             current_tardiness = neighbor_tardiness              # Update best solution if needed             if current_tardiness < best_tardiness:                 best_schedule = current_schedule[:]                 best_tardiness = current_tardiness          # Cool down         temperature *= cooling_rate         iteration += 1      # Convert back to job IDs     job_ids = [jobs[i]['id'] for i in best_schedule]     return job_ids",
+    "score": null,
+    "success": false,
+    "error": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_ef0_i_cu\\agent_run.py\", line 27\n    *= cooling_rate         iteration += 1      # Convert back to job IDs     job_ids = [jobs[i]['id'] for i in best_schedule]     return job_ids\n                  ^^^^^^\nSyntaxError: invalid syntax\n",
+    "failure_reason": "syntax error \u2014 invalid Python syntax: invalid syntax",
+    "notes": "Implemented Simulated Annealing algorithm with exponential cooling schedule and random job swapping as neighborhood transition. Uses adaptive temperature decay and tracks best solution found. The algorithm explores the solution space to escape local optima by occasionally accepting worse solutions based on probability.",
+    "instance_scores": {},
+    "instance_errors": {
+      "20jobs_t0.4": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_ef0_i_cu\\agent_run.py\", line 27\n    *= cooling_rate         iteration += 1      # Convert back to job IDs     job_ids = [jobs[i]['id'] for i in best_schedule]     return job_ids\n                  ^^^^^^\nSyntaxError: invalid syntax\n",
+      "50jobs_t0.6": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_3_cig9zm\\agent_run.py\", line 27\n    *= cooling_rate         iteration += 1      # Convert back to job IDs     job_ids = [jobs[i]['id'] for i in best_schedule]     return job_ids\n                  ^^^^^^\nSyntaxError: invalid syntax\n",
+      "100jobs_t0.8": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_wq8_u5kl\\agent_run.py\", line 27\n    *= cooling_rate         iteration += 1      # Convert back to job IDs     job_ids = [jobs[i]['id'] for i in best_schedule]     return job_ids\n                  ^^^^^^\nSyntaxError: invalid syntax\n"
+    }
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 2,
+    "agent_id": 1,
+    "mode": "explore",
+    "direction": "Design a hybrid approach combining Genetic Algorithm with Local Search Heuristics for job scheduling. Leverage insights from the Smith's rule (Agent 1) and ratio-based heuristic (Agent 3) to guide the initialization and mutation operators.",
+    "source_refs": [],
+    "approach": "Apply a hybrid heuristic combining Smith's rule and a local search to minimize total tardiness",
+    "code": "import random as rand import numpy as np def schedule(jobs): # Precompute job properties n = len(jobs) job_ids = [job['id'] for job in jobs] processing_times = [job['processing_time'] for job in jobs] due_dates = [job['due_date'] for job in jobs] # Smith's Rule: Sort by (processing_time / due_date) ratios def smith_rule_schedule(): sorted_jobs = sorted(range(n), key=lambda i: processing_times[i] / due_dates[i]) return [job_ids[i] for i in sorted_jobs] # Local search improvement function def local_search(schedule_order): def calculate_tardiness(schedule): total_tardiness = 0 current_time = 0 for job_id in schedule: job_idx = job_ids.index(job_id) current_time += processing_times[job_idx] tardiness = max(0, current_time - due_dates[job_idx]) total_tardiness += tardiness return total_tardiness best_schedule = schedule_order[:] best_tardiness = calculate_tardiness(best_schedule) improved = True while improved: improved = False for i in range(len(best_schedule)): for j in range(i + 1, len(best_schedule)): # Try swapping adjacent jobs new_schedule = best_schedule[:] new_schedule[i], new_schedule[j] = new_schedule[j], new_schedule[i] new_tardiness = calculate_tardiness(new_schedule) if new_tardiness < best_tardiness: best_schedule = new_schedule best_tardiness = new_tardiness improved = True break if improved: break return best_schedule # Start with Smith's rule and improve with local search initial_schedule = smith_rule_schedule() return local_search(initial_schedule)",
+    "score": null,
+    "success": false,
+    "error": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_ijnruc1k\\agent_run.py\", line 27\n    best_schedule)): # Try swapping adjacent jobs new_schedule = best_schedule[:] new_schedule[i], new_schedule[j] = new_schedule[j], new_schedule[i] new_tardiness = calculate_tardiness(new_schedule) if new_tardiness < best_tardiness: best_schedule = new_schedule best_tardiness = new_tardiness improved = True break if improved: break return best_schedule # Start with Smith's rule and improve with local search initial_schedule = smith_rule_schedule() return local_search(initial_schedule)\n                          ^^^^^^\nSyntaxError: invalid syntax\n",
+    "failure_reason": "syntax error \u2014 invalid Python syntax: invalid syntax",
+    "notes": "The solution uses Smith's rule as a starting heuristic for scheduling and then applies a local search improvement technique to reduce total tardiness. This avoids complex genetic algorithms which were causing issues. (fixed after pre-test retry 1)",
+    "instance_scores": {},
+    "instance_errors": {
+      "20jobs_t0.4": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_ijnruc1k\\agent_run.py\", line 27\n    best_schedule)): # Try swapping adjacent jobs new_schedule = best_schedule[:] new_schedule[i], new_schedule[j] = new_schedule[j], new_schedule[i] new_tardiness = calculate_tardiness(new_schedule) if new_tardiness < best_tardiness: best_schedule = new_schedule best_tardiness = new_tardiness improved = True break if improved: break return best_schedule # Start with Smith's rule and improve with local search initial_schedule = smith_rule_schedule() return local_search(initial_schedule)\n                          ^^^^^^\nSyntaxError: invalid syntax\n",
+      "50jobs_t0.6": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_swy76ef1\\agent_run.py\", line 27\n    best_schedule)): # Try swapping adjacent jobs new_schedule = best_schedule[:] new_schedule[i], new_schedule[j] = new_schedule[j], new_schedule[i] new_tardiness = calculate_tardiness(new_schedule) if new_tardiness < best_tardiness: best_schedule = new_schedule best_tardiness = new_tardiness improved = True break if improved: break return best_schedule # Start with Smith's rule and improve with local search initial_schedule = smith_rule_schedule() return local_search(initial_schedule)\n                          ^^^^^^\nSyntaxError: invalid syntax\n",
+      "100jobs_t0.8": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_g0ep_7i5\\agent_run.py\", line 27\n    best_schedule)): # Try swapping adjacent jobs new_schedule = best_schedule[:] new_schedule[i], new_schedule[j] = new_schedule[j], new_schedule[i] new_tardiness = calculate_tardiness(new_schedule) if new_tardiness < best_tardiness: best_schedule = new_schedule best_tardiness = new_tardiness improved = True break if improved: break return best_schedule # Start with Smith's rule and improve with local search initial_schedule = smith_rule_schedule() return local_search(initial_schedule)\n                          ^^^^^^\nSyntaxError: invalid syntax\n"
+    }
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 2,
+    "agent_id": 2,
+    "mode": "explore",
+    "direction": "Try the opposite of what has been working to preserve diversity",
+    "source_refs": [],
+    "approach": "Apply Smith's rule to sort jobs by (processing_time/due_date) ratio and schedule them in that order to minimize total tardiness.",
+    "code": "def schedule(jobs: list[dict]) -> list[int]:    # Calculate the ratio of processing time to due date for each job    ratios = []    for job in jobs:        ratio = job['processing_time'] / job['due_date']        ratios.append((ratio, job['id']))    # Sort jobs based on the ratio in ascending order    ratios.sort(key=lambda x: x[0])    # Extract job IDs in the sorted order    scheduled_jobs = [job_id for ratio, job_id in ratios]    return scheduled_jobs",
+    "score": null,
+    "success": false,
+    "error": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_kxljdie8\\agent_run.py\", line 30\n    try:\n    ^\nIndentationError: expected an indented block after function definition on line 27\n",
+    "failure_reason": "indentation error \u2014 code has broken indentation, likely malformed output",
+    "notes": "Applied Smith's rule which is known to minimize total tardiness for single-machine scheduling problems. The approach sorts jobs by the ratio of processing time to due date, which is a well-established heuristic for this type of scheduling problem. (fixed after pre-test retry 1)",
+    "instance_scores": {},
+    "instance_errors": {
+      "20jobs_t0.4": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_kxljdie8\\agent_run.py\", line 30\n    try:\n    ^\nIndentationError: expected an indented block after function definition on line 27\n",
+      "50jobs_t0.6": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_x87ieai5\\agent_run.py\", line 30\n    try:\n    ^\nIndentationError: expected an indented block after function definition on line 27\n",
+      "100jobs_t0.8": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_09ifnsr5\\agent_run.py\", line 30\n    try:\n    ^\nIndentationError: expected an indented block after function definition on line 27\n"
+    }
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 2,
+    "agent_id": 3,
+    "mode": "explore",
+    "direction": "Focus on reducing maximum tardiness before total tardiness",
+    "source_refs": [],
+    "approach": "Apply a priority rule based on due date and processing time to minimize total tardiness",
+    "code": "import heapq as hq  # For priority queue operations  def schedule(jobs):  # Create a list of tuples (due_date, processing_time, job_id)  job_info = [(job[  # Sort by due date first, then by processing time to prioritize earlier deadlines and shorter jobs  job_info.sort(key=lambda x: (x[0], x[1]))  # Extract just the job IDs from sorted info  return [job[2] for job in job_info]",
+    "score": null,
+    "success": false,
+    "error": "NameError: name 'schedule' is not defined",
+    "failure_reason": "undefined variable 'schedule' \u2014 code references something not defined",
+    "notes": "The approach uses a simple priority rule that sorts jobs by their due dates and then by processing times to create a schedule that minimizes total tardiness. The code has been corrected to properly define the schedule function. (fixed after pre-test retry 1)",
+    "instance_scores": {},
+    "instance_errors": {
+      "20jobs_t0.4": "NameError: name 'schedule' is not defined",
+      "50jobs_t0.6": "NameError: name 'schedule' is not defined",
+      "100jobs_t0.8": "NameError: name 'schedule' is not defined"
+    }
+  }
+]

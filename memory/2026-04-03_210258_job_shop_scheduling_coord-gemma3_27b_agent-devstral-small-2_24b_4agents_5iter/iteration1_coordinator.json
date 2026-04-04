@@ -1,0 +1,31 @@
+{
+  "record_type": "coordinator_decision",
+  "iteration": 1,
+  "analysis": null,
+  "assignments": [
+    {
+      "agent_id": 0,
+      "mode": "explore",
+      "direction": "Implement a Genetic Algorithm (GA) with a permutation-based representation for the schedule. Use a simple two-point crossover and swap mutation. Fitness function: minimize makespan. Explore different population sizes (e.g., 50, 100, 200).",
+      "source_refs": []
+    },
+    {
+      "agent_id": 1,
+      "mode": "explore",
+      "direction": "Implement a Simulated Annealing (SA) algorithm. Represent a schedule as a sequence of operations. Use a neighborhood move of swapping two adjacent operations. Implement a geometric cooling schedule. Experiment with initial temperature and cooling rate.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 2,
+      "mode": "explore",
+      "direction": "Implement a Priority Dispatch Rule based scheduling algorithm. Explore several priority rules such as Shortest Processing Time (SPT), Earliest Due Date (EDD), and Critical Ratio (CR). Compare their performance on the initial problem instances.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 3,
+      "mode": "explore",
+      "direction": "Implement a Tabu Search algorithm. Represent a schedule as a sequence of operations. Use a neighborhood move of swapping two operations. Maintain a Tabu list to avoid revisiting recently explored solutions. Experiment with Tabu list size.",
+      "source_refs": []
+    }
+  ]
+}

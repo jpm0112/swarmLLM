@@ -35,6 +35,8 @@ DEFAULT_PROFILE_BY_BACKEND = {
     "vllm-metal": os.path.join("configs", "backends", "vllm-metal.local.example.toml"),
     "vllm": os.path.join("configs", "backends", "vllm.single-node.example.toml"),
     "mlx-lm": os.path.join("configs", "backends", "mlx-lm.local.example.toml"),
+    "groq": os.path.join("configs", "backends", "groq.cloud.example.toml"),
+    "together": os.path.join("configs", "backends", "together.cloud.example.toml"),
 }
 
 DEFAULT_VLLM_CONFIG_BY_BACKEND = {
@@ -73,14 +75,14 @@ def supported_backends_for_platform(system_name: str, machine: str) -> list[str]
     system_name = system_name.lower()
     machine = machine.lower()
     if system_name == "windows":
-        return ["ollama", "ollama-cloud", "vllm"]
+        return ["ollama", "ollama-cloud", "groq", "together", "vllm"]
     if system_name == "darwin":
-        backends = ["ollama", "ollama-cloud"]
+        backends = ["ollama", "ollama-cloud", "groq", "together"]
         if machine in {"arm64", "aarch64"}:
             backends.append("vllm-metal")
             backends.append("mlx-lm")
         return backends
-    return ["ollama", "ollama-cloud", "vllm"]
+    return ["ollama", "ollama-cloud", "groq", "together", "vllm"]
 
 
 def ask(prompt: str, default: str, explanation: str = "") -> str:
@@ -156,6 +158,16 @@ def backend_notes(backend: str) -> str:
         return (
             "Uses the Ollama cloud API. Requires an API key set via OLLAMA_API_KEY "
             "or entered during setup."
+        )
+    if backend == "groq":
+        return (
+            "Uses the Groq cloud API for fast inference. Requires an API key set via "
+            "GROQ_API_KEY or entered during setup. Get one at https://console.groq.com."
+        )
+    if backend == "together":
+        return (
+            "Uses the Together AI cloud API. Requires an API key set via "
+            "TOGETHER_API_KEY or entered during setup. Get one at https://api.together.ai."
         )
     if backend == "vllm-metal":
         return (
@@ -836,6 +848,76 @@ def main():
             print(f"\n  Agent model ~{agent_size:.1f} GB")
             print(f"    Estimated ~{parallel_gpu0} parallel slots (assuming {GPU_0_VRAM} GB VRAM)")
 
+    elif backend == "groq":
+        if not os.environ.get("GROQ_API_KEY"):
+            print()
+            print("  A Groq API key is required. Get one at https://console.groq.com")
+            while True:
+                api_key_input = input("  GROQ_API_KEY: ").strip()
+                if api_key_input:
+                    os.environ["GROQ_API_KEY"] = api_key_input
+                    break
+                print("  API key cannot be empty.")
+        api_key = resolve_api_key(profile.coordinator_endpoints[0], profile.kind)
+        try:
+            available_models = fetch_available_models(
+                profile.coordinator_endpoints[0].base_url, api_key,
+            )
+        except RuntimeError as exc:
+            print(f"\n  Warning: could not fetch Groq models: {exc}")
+            available_models = []
+
+        if available_models:
+            print()
+            print("  The COORDINATOR reads all results and assigns research")
+            print("  directions. Bigger model = smarter strategy.")
+            coordinator_model = pick_option("Coordinator model", available_models, default=coordinator_model)
+            print(f"  -> {coordinator_model}")
+            print()
+            print("  The AGENT model writes optimization code. Runs N times")
+            print("  per iteration, so speed matters. Can be smaller/faster.")
+            worker_model = pick_option("Agent model", available_models, default=worker_model)
+            print(f"  -> {worker_model}")
+        else:
+            coordinator_model = ask("Coordinator model", coordinator_model)
+            worker_model = ask("Worker model", worker_model)
+        recommended_parallel = 5
+
+    elif backend == "together":
+        if not os.environ.get("TOGETHER_API_KEY"):
+            print()
+            print("  A Together AI API key is required. Get one at https://api.together.ai")
+            while True:
+                api_key_input = input("  TOGETHER_API_KEY: ").strip()
+                if api_key_input:
+                    os.environ["TOGETHER_API_KEY"] = api_key_input
+                    break
+                print("  API key cannot be empty.")
+        api_key = resolve_api_key(profile.coordinator_endpoints[0], profile.kind)
+        try:
+            available_models = fetch_available_models(
+                profile.coordinator_endpoints[0].base_url, api_key,
+            )
+        except RuntimeError as exc:
+            print(f"\n  Warning: could not fetch Together AI models: {exc}")
+            available_models = []
+
+        if available_models:
+            print()
+            print("  The COORDINATOR reads all results and assigns research")
+            print("  directions. Bigger model = smarter strategy.")
+            coordinator_model = pick_option("Coordinator model", available_models, default=coordinator_model)
+            print(f"  -> {coordinator_model}")
+            print()
+            print("  The AGENT model writes optimization code. Runs N times")
+            print("  per iteration, so speed matters. Can be smaller/faster.")
+            worker_model = pick_option("Agent model", available_models, default=worker_model)
+            print(f"  -> {worker_model}")
+        else:
+            coordinator_model = ask("Coordinator model", coordinator_model)
+            worker_model = ask("Worker model", worker_model)
+        recommended_parallel = 5
+
     elif backend in {"vllm", "vllm-metal", "mlx-lm"}:
         coordinator_model, worker_model = choose_vllm_models(
             coordinator_model, worker_model,
@@ -859,7 +941,7 @@ def main():
         "How many coordinator/worker rounds to run.",
     )
     if problem_type == "job_shop_scheduling":
-        instance_default = "easy,medium,hard"
+        instance_default = "easy,medium,hard,very_hard"
         instance_help = ("JSPLIB instances to test on. Use difficulty levels (easy,medium,hard,very_hard) "
                          "or specific instance names (ft06,ft10,abz7). E.g. easy,medium,hard")
     else:
@@ -884,6 +966,11 @@ def main():
         "Agent retries",
         "1",
         "How many fix-up attempts a worker gets if the smallest-instance pre-test fails.",
+    )
+    socrates = ask(
+        "Enable Socrates knowledge agent (yes/no)",
+        "yes",
+        "Socrates distills abstract knowledge from past iterations and feeds it to the coordinator.",
     )
     seed = ask(
         "Random seed",
@@ -916,6 +1003,7 @@ def main():
     print(f"    Instances:      {instance_sizes}")
     print(f"    Explore ratio:  {explore_ratio}")
     print(f"    Timeout:        {timeout}s")
+    print(f"    Socrates:       {socrates}")
     print(f"    Seed:           {seed}")
     print(f"    Output folder:  {output_dir}")
     print("=" * 60)
@@ -977,6 +1065,8 @@ def main():
         timeout,
         "--agent-retries",
         retries,
+        "--socrates",
+        socrates,
         "--output-dir",
         output_dir,
     ]

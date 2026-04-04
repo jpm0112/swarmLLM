@@ -26,12 +26,14 @@ from swarmllm.llm.schemas import DirectionAssignment
 from swarmllm.problems import ProblemBase, ProblemInstance, InstanceProfile, load_problem
 from swarmllm.core.agent import run_agent
 from swarmllm.core.coordinator import get_initial_directions, get_next_directions
+from swarmllm.core.socrates import run_socrates
 from swarmllm.llm.health import validate_backend_or_raise
 from swarmllm.llm.routing import EndpointRouter
 from swarmllm.tracking.shared_log import SharedLog
 from swarmllm.tracking.prompt_logger import PromptLogger
 from swarmllm.tracking.telemetry import DashboardRequest, RunTelemetry
 from swarmllm.tracking.token_tracker import TokenTracker
+from swarmllm.tracking.attempt_memory import AttemptMemory
 
 
 async def run_swarm(
@@ -72,7 +74,7 @@ async def run_swarm(
 async def _run_swarm_impl(config: Config, output_dir: str, telemetry: RunTelemetry):
     """Run the inner swarm loop with redirected logging and telemetry."""
     print("=" * 60)
-    print("  SwarmLLM — Multi-Agent Optimization")
+    print(f"  SwarmLLM — {config.problem.problem_type.replace('_', ' ').title()}")
     print("=" * 60)
     print()
 
@@ -110,7 +112,7 @@ async def _run_swarm_impl(config: Config, output_dir: str, telemetry: RunTelemet
         instance_names.append(profile.name)
 
     # Save instances to disk
-    instances_dir = os.path.join(output_dir, "instances")
+    instances_dir = os.path.join(output_dir, "instances", problem.name)
     os.makedirs(instances_dir, exist_ok=True)
     for inst, profile in zip(problems, profiles):
         path = os.path.join(instances_dir, f"{profile.name}.json")
@@ -151,7 +153,8 @@ async def _run_swarm_impl(config: Config, output_dir: str, telemetry: RunTelemet
         aggregate_baselines=agg_baselines,
     )
     print(f"\n  {'—' * 56}")
-    print(f"  AGGREGATE (sum across all instances) — target to beat:")
+    print(f"  AGGREGATE (sum of {len(instance_names)} instances) — {problem.objective}")
+    print(f"  Agents must beat the best aggregate to count as an improvement:")
     for bl_name, score in agg_baselines.items():
         marker = " <-- best" if bl_name == best_agg_name else ""
         print(f"    {bl_name:>4}: {score:>10,}{marker}")
@@ -162,6 +165,7 @@ async def _run_swarm_impl(config: Config, output_dir: str, telemetry: RunTelemet
     log = SharedLog(config.log, output_dir)
     prompt_logger = PromptLogger(output_dir)
     token_tracker = TokenTracker()
+    memory = AttemptMemory(os.path.basename(output_dir))
 
     # Save config for this run
     config_path = os.path.join(output_dir, "config.json")
@@ -176,9 +180,8 @@ async def _run_swarm_impl(config: Config, output_dir: str, telemetry: RunTelemet
     )
 
     # 3. Main loop
-    best_score = min(agg_baselines.values())
-    best_approach = "baseline"
-    telemetry.set_best_score(best_score)
+    best_score = None
+    best_approach = None
     best_instance_scores = {}  # per-instance scores for best solution
     # Track top solutions (score, approach, code) for coordinator context
     top_solutions = []
@@ -237,6 +240,7 @@ async def _run_swarm_impl(config: Config, output_dir: str, telemetry: RunTelemet
                 iteration=iteration,
                 duration_seconds=coord_duration,
             )
+            memory.record_coordinator_decision(iteration, assignments)
         else:
             telemetry.set_stage("coordinator analysis")
             telemetry.emit_event(
@@ -257,6 +261,7 @@ async def _run_swarm_impl(config: Config, output_dir: str, telemetry: RunTelemet
                 prompt_logger=prompt_logger,
                 best_solution=best_solution,
                 problem=problem,
+                knowledge=memory.read_knowledge() or None,
             )
             coord_duration = time.time() - coord_start
             if coord_tokens:
@@ -285,13 +290,14 @@ async def _run_swarm_impl(config: Config, output_dir: str, telemetry: RunTelemet
             )
             print(f"  Coordinator analysis: {analysis[:200]}...")
             log.append_coordinator_summary(iteration, analysis)
+            memory.record_coordinator_decision(iteration, assignments, analysis=analysis)
             telemetry.emit_event(
                 "coordinator_analysis_logged",
                 message=_truncate_analysis(analysis),
                 iteration=iteration,
             )
 
-        # Run agents with concurrency limit
+        # Run agents with concurrency limit (+ Socrates in parallel from iter 2)
         telemetry.set_stage("agent execution")
         print(f"  Running {config.swarm.num_agents} agents "
               f"(max {config.swarm.max_concurrent_agents} concurrent)...")
@@ -301,7 +307,7 @@ async def _run_swarm_impl(config: Config, output_dir: str, telemetry: RunTelemet
         # Build (name, problem_instance) tuples for agents
         named_problems = list(zip(instance_names, problems))
 
-        results = await _run_agents_parallel(
+        agents_coro = _run_agents_parallel(
             assignments=assignments,
             problems=named_problems,
             config=config,
@@ -312,6 +318,29 @@ async def _run_swarm_impl(config: Config, output_dir: str, telemetry: RunTelemet
             result_index=result_index,
             telemetry=telemetry,
         )
+
+        # Run Socrates concurrently with coders (from iteration 2+)
+        if config.swarm.enable_socrates and iteration >= 2:
+            socrates_coro = run_socrates(
+                iteration=iteration,
+                memory=memory,
+                config=config,
+                endpoint=coord_endpoint,
+                prompt_logger=prompt_logger,
+                telemetry=telemetry,
+            )
+            results, (socrates_knowledge, socrates_tokens) = await asyncio.gather(
+                agents_coro, socrates_coro,
+            )
+            if socrates_tokens:
+                token_tracker.record(
+                    "socrates", iteration, None,
+                    config.llm.coordinator_model, socrates_tokens,
+                )
+            if socrates_knowledge:
+                print(f"  Socrates updated knowledge ({len(socrates_knowledge)} chars)")
+        else:
+            results = await agents_coro
 
         elapsed = time.time() - start_time
         print(f"  Completed in {elapsed:.1f}s")
@@ -346,6 +375,15 @@ async def _run_swarm_impl(config: Config, output_dir: str, telemetry: RunTelemet
                 exec_time=result.get("exec_time"),
             )
 
+            # Record attempt in memory
+            assignment = next(a for a in assignments if a.agent_id == result["agent_id"])
+            memory.record_attempt(
+                iteration=iteration, agent_id=result["agent_id"],
+                mode=assignment.mode, direction=result["direction"],
+                source_refs=[{"agent_id": r.agent_id, "iteration": r.iteration} for r in assignment.source_refs],
+                result=result,
+            )
+
             # Index result for exploit context in subsequent iterations
             result_index[(result["agent_id"], iteration)] = {
                 "agent_id": result["agent_id"],
@@ -366,7 +404,7 @@ async def _run_swarm_impl(config: Config, output_dir: str, telemetry: RunTelemet
                 top_solutions.sort(key=lambda x: x["score"])
                 top_solutions = top_solutions[:5]
 
-                if result["score"] < best_score:
+                if best_score is None or result["score"] < best_score:
                     best_score = result["score"]
                     best_approach = result["approach"]
                     best_instance_scores = result.get("instance_scores", {})
@@ -385,6 +423,9 @@ async def _run_swarm_impl(config: Config, output_dir: str, telemetry: RunTelemet
                     print(f"  ** New best! Agent {result['agent_id']}: "
                           f"aggregate={result['score']} ({scores_detail}) "
                           f"({result['approach']})")
+
+        # Flush coder memory for this iteration
+        memory.flush_iteration_coders(iteration)
 
         # Collect failure reasons
         failure_counts = {}
@@ -435,7 +476,7 @@ async def _run_swarm_impl(config: Config, output_dir: str, telemetry: RunTelemet
         )
 
         print(f"  Results: {successful}/{config.swarm.num_agents} successful, "
-              f"best aggregate: {best_score}")
+              f"best aggregate: {best_score if best_score is not None else 'n/a'}")
         _print_iteration_summary(results, instance_names)
         token_tracker.print_iteration_tokens(iteration)
         token_tracker.print_running_total()
@@ -776,20 +817,24 @@ def _print_final_summary(log, all_baselines, agg_baselines, best_score, best_app
     # Best result
     out()
     out("  BEST RESULT:")
-    out(f"    Aggregate score: {best_score}")
-    if best_instance_scores:
-        parts = [f"{name}={score}" for name, score in sorted(best_instance_scores.items())]
-        out(f"    Per-instance:    {', '.join(parts)}")
-    out(f"    Approach:        {best_approach}")
-    out()
-    if best_score < best_baseline:
-        improvement = ((best_baseline - best_score) / best_baseline) * 100
-        out(f"    >>> Swarm BEAT baselines by {improvement:.1f}% <<<")
-    elif best_score == best_baseline:
-        out(f"    --- Swarm MATCHED best baseline ---")
+    if best_score is not None:
+        out(f"    Aggregate score: {best_score}")
+        if best_instance_scores:
+            parts = [f"{name}={score}" for name, score in sorted(best_instance_scores.items())]
+            out(f"    Per-instance:    {', '.join(parts)}")
+        out(f"    Approach:        {best_approach}")
+        out()
+        if best_score < best_baseline:
+            improvement = ((best_baseline - best_score) / best_baseline) * 100
+            out(f"    >>> Swarm BEAT baselines by {improvement:.1f}% <<<")
+        elif best_score == best_baseline:
+            out(f"    --- Swarm MATCHED best baseline ---")
+        else:
+            gap = ((best_score - best_baseline) / best_baseline) * 100
+            out(f"    Swarm did NOT beat baselines (gap: +{gap:.1f}%)")
     else:
-        gap = ((best_score - best_baseline) / best_baseline) * 100
-        out(f"    Swarm did NOT beat baselines (gap: +{gap:.1f}%)")
+        out("    No successful agent runs — no solution found.")
+        out()
 
     # Iteration progression
     out()
@@ -801,11 +846,12 @@ def _print_final_summary(log, all_baselines, agg_baselines, best_score, best_app
     total_wall = 0
     for s in iteration_stats:
         iter_best = str(s["best_score_this_iter"]) if s["best_score_this_iter"] is not None else "—"
+        overall_best = str(s["best_score_overall"]) if s["best_score_overall"] is not None else "—"
         out(f"    {s['iteration']:>4} | "
             f"{s['successful']:>3}/{s['num_agents']:<3} | "
             f"{s['failed']:>6} | "
             f"{iter_best:>10} | "
-            f"{s['best_score_overall']:>10} | "
+            f"{overall_best:>10} | "
             f"{s['wall_time']:>8.1f}s | "
             f"{s['avg_llm_time']:>7.1f}s | "
             f"{s['avg_exec_time']:>7.1f}s")

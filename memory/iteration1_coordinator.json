@@ -1,0 +1,13 @@
+{
+  "record_type": "coordinator_decision",
+  "iteration": 1,
+  "analysis": null,
+  "assignments": [
+    {
+      "agent_id": 0,
+      "mode": "explore",
+      "direction": "Try a novel heuristic approach not yet explored",
+      "source_refs": []
+    }
+  ]
+}

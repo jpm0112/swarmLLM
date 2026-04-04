@@ -38,7 +38,7 @@ class EndpointProfile(BaseModel):
 
 class BackendProfile(BaseModel):
     name: str
-    kind: Literal["ollama", "vllm-metal", "vllm", "mlx-lm"]
+    kind: Literal["ollama", "vllm-metal", "vllm", "mlx-lm", "groq", "together"]
     request_timeout: int = Field(default=300, gt=0)
     default_max_concurrent_agents: int | None = Field(default=None, gt=0)
     coordinator: RoleProfile

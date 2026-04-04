@@ -1,0 +1,87 @@
+{
+  "record_type": "coordinator_decision",
+  "iteration": 2,
+  "analysis": "Iteration 1 established that constructive heuristics like the Modified Due Date (MDD) rule (Agents 4, 5) and local search metaheuristics like Tabu Search (Agent 6) and Variable Neighborhood Search (Agent 3) are highly effective for this problem. Tabu Search is the current leader, but its performance likely suffers from random initialization. Genetic Algorithms and ACO struggled, possibly due to the large search space of the 100-job instance. The most successful approaches prioritized balancing urgency (due dates) with efficiency (processing times). The next phase should focus on hybridizing these strong constructive heuristics with local search and exploring more robust neighborhood structures.",
+  "assignments": [
+    {
+      "agent_id": 0,
+      "mode": "explore",
+      "direction": "Implement Iterated Local Search (ILS). Use the MDD rule for an initial solution, apply a local search (like insertion moves), and then use a 'perturbation' step (e.g., several random swaps) to escape local optima and restart the search.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 1,
+      "mode": "exploit",
+      "direction": "Refine the Simulated Annealing approach by initializing the schedule with the MDD rule instead of a random shuffle. Expand the neighborhood to include both swaps and insertions, and implement a slower cooling schedule to allow for deeper exploitation.",
+      "source_refs": [
+        {
+          "agent_id": 1,
+          "iteration": 1
+        },
+        {
+          "agent_id": 4,
+          "iteration": 1
+        }
+      ]
+    },
+    {
+      "agent_id": 2,
+      "mode": "explore",
+      "direction": "Develop a Large Neighborhood Search (LNS) algorithm. Use a 'destroy' operator that removes a contiguous block of jobs or a set of jobs with high individual tardiness, and a 'repair' operator that re-inserts them using a greedy MDD-based logic.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 3,
+      "mode": "exploit",
+      "direction": "Enhance the Variable Neighborhood Search (VNS) by using the MDD rule for initialization. Add a 'shaking' procedure that increases in intensity when the local search fails to find improvements, and ensure the local search uses the most efficient neighborhood (insertion) first.",
+      "source_refs": [
+        {
+          "agent_id": 3,
+          "iteration": 1
+        },
+        {
+          "agent_id": 5,
+          "iteration": 1
+        }
+      ]
+    },
+    {
+      "agent_id": 4,
+      "mode": "exploit",
+      "direction": "Improve the leading Tabu Search by initializing with the MDD rule. Optimize the neighborhood search by focusing on 'critical' jobs (those currently tardy) and use a more sophisticated tabu tenure that scales with the number of jobs.",
+      "source_refs": [
+        {
+          "agent_id": 6,
+          "iteration": 1
+        },
+        {
+          "agent_id": 4,
+          "iteration": 1
+        }
+      ]
+    },
+    {
+      "agent_id": 5,
+      "mode": "exploit",
+      "direction": "Extend the MDD heuristic into a Beam Search. Instead of a purely greedy selection, maintain a 'beam' of the top K partial schedules at each step, evaluating them based on current tardiness plus a look-ahead estimate of future tardiness.",
+      "source_refs": [
+        {
+          "agent_id": 5,
+          "iteration": 1
+        }
+      ]
+    },
+    {
+      "agent_id": 6,
+      "mode": "explore",
+      "direction": "Implement a Greedy Randomized Adaptive Search Procedure (GRASP). In the construction phase, use a restricted candidate list (RCL) based on MDD values to build diverse initial solutions, followed by a local search phase using insertion moves.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 7,
+      "mode": "explore",
+      "direction": "Explore the Late Acceptance Hill Climbing (LAHC) algorithm. This metaheuristic is simpler than SA or Tabu Search but often more robust; it accepts a move if its fitness is better than the fitness of the solution several iterations ago.",
+      "source_refs": []
+    }
+  ]
+}

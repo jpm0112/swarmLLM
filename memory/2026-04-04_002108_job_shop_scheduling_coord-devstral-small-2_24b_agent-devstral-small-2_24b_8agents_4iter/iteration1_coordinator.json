@@ -1,0 +1,55 @@
+{
+  "record_type": "coordinator_decision",
+  "iteration": 1,
+  "analysis": null,
+  "assignments": [
+    {
+      "agent_id": 0,
+      "mode": "explore",
+      "direction": "Implement a genetic algorithm with permutation-based encoding and standard crossover/mutation operators. Focus on minimizing makespan for small to medium-sized Job Shop Scheduling Problem instances.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 1,
+      "mode": "explore",
+      "direction": "Develop a priority rule-based heuristic (e.g., Shortest Processing Time, Earliest Due Date) and evaluate its performance on benchmark instances. Include a local search component to refine schedules.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 2,
+      "mode": "explore",
+      "direction": "Explore a tabu search approach with adaptive memory and neighborhood structures tailored for Job Shop Scheduling. Test different tabu tenure strategies.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 3,
+      "mode": "explore",
+      "direction": "Implement a constraint programming model using a solver like Google OR-Tools. Focus on leveraging global constraints specific to scheduling problems.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 4,
+      "mode": "explore",
+      "direction": "Develop a reinforcement learning agent using a neural network to learn scheduling policies. Use a simple state representation and policy gradient methods.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 5,
+      "mode": "explore",
+      "direction": "Explore a particle swarm optimization approach with custom particle encoding for job sequences and velocity updates tailored for scheduling.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 6,
+      "mode": "explore",
+      "direction": "Implement a simulated annealing algorithm with a temperature schedule and neighborhood moves designed for Job Shop Scheduling. Test different cooling rates.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 7,
+      "mode": "explore",
+      "direction": "Develop a hybrid approach combining a constructive heuristic (e.g., greedy algorithm) with a local search method (e.g., 2-opt or swap moves).",
+      "source_refs": []
+    }
+  ]
+}

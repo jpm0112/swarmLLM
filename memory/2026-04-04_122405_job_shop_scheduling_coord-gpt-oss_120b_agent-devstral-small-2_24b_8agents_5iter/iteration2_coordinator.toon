@@ -1,0 +1,43 @@
+record_type: coordinator_decision
+iteration: 2
+analysis: "The CP‑SAT model (Agent 4) yields the lowest aggregate makespan (3579) and is the strongest baseline. MILP (Agent 0) and Simulated Annealing (Agent 5) reach much higher aggregates, indicating they are weaker on their own but could provide useful structures for hybridization. The Ant‑Colony hybrid (Agent 6) and GA (Agent 1) failed to outperform CP‑SAT, while Tabu (Agent 2) and RL (Agent 3) produced incorrect schedules. Future work should focus on enhancing the CP‑SAT solution with advanced search (e.g., Large Neighborhood Search) and on hybrid metaheuristics that start from the CP‑SAT schedule. New algorithm families such as beam search, memetic GA, and fast RL policies are still unexplored."
+assignments[8]:
+  - agent_id: 0
+    mode: exploit
+    direction: "Refine the MILP formulation by tightening big‑M constants, adding precedence cuts, and integrating the CP‑SAT solution as warm‑start values to reduce solution time and improve makespan."
+    source_refs[2,]{agent_id,iteration}:
+      0,1
+      4,1
+  - agent_id: 1
+    mode: explore
+    direction: Develop a memetic algorithm that combines a population‑based GA with a local search (2‑opt on operation sequences) and seeds the initial population with the CP‑SAT schedule to accelerate convergence.
+    source_refs[0]:
+  - agent_id: 2
+    mode: exploit
+    direction: "Re‑implement tabu search using the CP‑SAT schedule as the initial solution and a richer neighborhood (swap any two operations on the critical path, not only adjacent). Maintain a dynamic tabu tenure based on recent improvement magnitude."
+    source_refs[1,]{agent_id,iteration}:
+      4,1
+  - agent_id: 3
+    mode: explore
+    direction: "Create a lightweight reinforcement‑learning policy (e.g., policy gradient with a shallow network) that selects the next operation based on simple state features and runs within a strict 30‑second budget, falling back to a greedy heuristic if time expires."
+    source_refs[0]:
+  - agent_id: 4
+    mode: exploit
+    direction: "Add a Large Neighborhood Search (LNS) layer on top of the CP‑SAT model: iteratively relax a subset of start‑time variables, re‑solve the sub‑problem, and accept improvements, using the original CP solution as the initial point."
+    source_refs[2,]{agent_id,iteration}:
+      4,1
+      5,1
+  - agent_id: 5
+    mode: exploit
+    direction: "Hybridize Simulated Annealing with the CP‑SAT schedule: start SA from the CP solution and use a temperature schedule that focuses on swapping operations on the critical path, while preserving feasibility via incremental recomputation."
+    source_refs[2,]{agent_id,iteration}:
+      4,1
+      0,1
+  - agent_id: 6
+    mode: explore
+    direction: "Implement a beam search construction heuristic that builds schedules operation by operation, keeping the top‑k partial schedules at each step, and optionally integrates a quick local improvement after each beam expansion."
+    source_refs[0]:
+  - agent_id: 7
+    mode: explore
+    direction: "Design a learning‑guided priority rule: train a lightweight regression model on instance features (job count, machine count, processing time statistics) to predict operation priorities, then use those priorities in a fast greedy dispatcher."
+    source_refs[0]:

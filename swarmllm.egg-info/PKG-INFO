@@ -6,6 +6,7 @@ Requires-Python: >=3.10
 Requires-Dist: gurobipy>=13.0.1
 Requires-Dist: networkx>=3.4.2
 Requires-Dist: numpy>=1.24.0
+Requires-Dist: ortools>=9.15.6755
 Requires-Dist: psutil>=7.2.2
 Requires-Dist: pydantic>=2
 Requires-Dist: pydantic-ai-slim[openai]>=1.73.0

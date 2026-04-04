@@ -1,0 +1,31 @@
+{
+  "record_type": "coordinator_decision",
+  "iteration": 1,
+  "analysis": null,
+  "assignments": [
+    {
+      "agent_id": 0,
+      "mode": "explore",
+      "direction": "Implement a Genetic Algorithm (GA) with a permutation-based chromosome representation for job order. Use a simple two-point crossover and swap mutation. Evaluate fitness based on makespan. Focus on basic implementation and parameter tuning (population size, crossover/mutation rates).",
+      "source_refs": []
+    },
+    {
+      "agent_id": 1,
+      "mode": "explore",
+      "direction": "Implement a Simulated Annealing (SA) algorithm. Represent a schedule as a sequence of operations. Define a neighborhood function that swaps two adjacent operations. Use a decreasing temperature schedule and accept worse solutions with a probability based on the Metropolis criterion. Evaluate fitness based on makespan.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 2,
+      "mode": "explore",
+      "direction": "Implement a Priority Dispatching Rule-based heuristic. Explore different priority rules (e.g., Shortest Processing Time (SPT), Earliest Due Date (EDD), First-Come, First-Served (FCFS), Critical Ratio). Evaluate the makespan for each rule and select the best-performing one.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 3,
+      "mode": "explore",
+      "direction": "Implement a Tabu Search algorithm. Represent a solution as a sequence of job operations. Define neighborhood moves as swapping two operations. Maintain a tabu list to prevent revisiting recently explored solutions. Evaluate fitness based on makespan and use an aspiration criterion to override tabu status for improving best solutions.",
+      "source_refs": []
+    }
+  ]
+}

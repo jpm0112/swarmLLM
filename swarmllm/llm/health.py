@@ -102,6 +102,14 @@ def _format_connect_error(backend_kind: str, configured_base_url: str, attempted
             "Make sure your mlx-lm server is running (`mlx_lm.server --model <model>`) "
             "and serving an OpenAI-compatible API on the configured port."
         ),
+        "groq": (
+            "Make sure your GROQ_API_KEY environment variable is set. "
+            "Get an API key at https://console.groq.com."
+        ),
+        "together": (
+            "Make sure your TOGETHER_API_KEY environment variable is set. "
+            "Get an API key at https://api.together.ai."
+        ),
     }[backend_kind]
     return (
         f"Could not connect to the configured {backend_kind} backend at {normalized}. "

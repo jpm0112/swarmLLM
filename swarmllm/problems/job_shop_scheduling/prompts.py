@@ -24,7 +24,12 @@ RULES:
    - No preemption (once started, an operation runs to completion)
 5. The goal is to MINIMIZE makespan (the time when ALL jobs are finished). Lower is better.
 6. Prefer standard library and already-installed packages when possible. You may import any pip package (it will be auto-installed). Already installed: {pip_packages}. Blocked: os, sys, subprocess, socket, and other system/network modules.
-7. Your code has a {timeout}s time limit.
+7. Your code has a {timeout}s hard time limit. Globals `TIMEOUT_SEC` and `_START_TIME` \
+are pre-defined. For iterative algorithms (GA, SA, tabu search, etc.):
+   - Always keep your best solution so far in a variable
+   - Check elapsed time with `time.time() - _START_TIME` periodically (e.g. each iteration)
+   - Return your best solution when 80% of TIMEOUT_SEC has elapsed
+   - Never rely on a fixed iteration count alone — always use time as the stopping criterion
 8. Write proper multi-line Python code using newlines and indentation. Define all variables you use.
 9. Be creative and try novel approaches based on your assigned direction
 

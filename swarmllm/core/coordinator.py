@@ -78,6 +78,7 @@ async def get_next_directions(
     prompt_logger: PromptLogger | None = None,
     best_solution: dict | None = None,
     problem: ProblemBase | None = None,
+    knowledge: str | None = None,
 ) -> tuple[str, list[DirectionAssignment], TokenUsage | None]:
     """
     Ask the coordinator to analyze the last iteration and assign new directions.
@@ -95,11 +96,21 @@ async def get_next_directions(
         best_section += f"```python\n{best_solution['code']}\n```\n\n"
         best_section += "Agents may refine, combine, or contrast with this solution.\n"
 
+    knowledge_section = ""
+    if knowledge:
+        knowledge_section = (
+            "\n## Accumulated Knowledge (from Socrates)\n\n"
+            "The following insights were distilled from all previous iterations. "
+            "Use them to inform your assignments — avoid known dead ends, "
+            "lean into promising directions, and watch for recurring pitfalls.\n\n"
+            f"{knowledge}\n"
+        )
+
     prompt = f"""## Last Iteration Results
 
 {last_iteration_content}
 
-{best_section}
+{best_section}{knowledge_section}
 ---
 
 This is iteration {iteration}. Assign one direction to each agent from 0 to

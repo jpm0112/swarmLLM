@@ -18,7 +18,12 @@ Rules:
 4. The goal is to minimize total tardiness (lower is better)
 5. You may import pip packages already available in the sandbox: {pip_packages}
 6. Dangerous system/network modules are blocked
-7. Your code has a {timeout}s time limit
+7. Your code has a {timeout}s hard time limit. Globals `TIMEOUT_SEC` and `_START_TIME` \
+are pre-defined. For iterative algorithms (GA, SA, tabu search, etc.):
+   - Always keep your best solution so far in a variable
+   - Check elapsed time with `time.time() - _START_TIME` periodically (e.g. each iteration)
+   - Return your best solution when 80% of TIMEOUT_SEC has elapsed
+   - Never rely on a fixed iteration count alone — always use time as the stopping criterion
 8. Write proper multi-line Python code using newlines and indentation. Define all variables you use.
 
 Return structured output with:

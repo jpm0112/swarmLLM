@@ -1,0 +1,82 @@
+[
+  {
+    "record_type": "agent_attempt",
+    "iteration": 1,
+    "agent_id": 0,
+    "mode": "explore",
+    "direction": "Implement a Genetic Algorithm with tournament selection and uniform crossover.",
+    "source_refs": [],
+    "approach": "Failed to get LLM response",
+    "code": "",
+    "score": null,
+    "success": false,
+    "error": "LLM error (UnexpectedModelBehavior): Model token limit (4096) exceeded before any response was generated. Increase the `max_tokens` model setting, or simplify the prompt to result in a shorter response that will fit within the limit.",
+    "failure_reason": "LLM unreachable \u2014 could not get a response from the model",
+    "notes": "",
+    "instance_scores": {},
+    "instance_errors": {}
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 1,
+    "agent_id": 1,
+    "mode": "explore",
+    "direction": "Apply a Simulated Annealing approach with exponential cooling schedule.",
+    "source_refs": [],
+    "approach": "Simulated annealing to minimize total tardiness",
+    "code": "import random, math, copy, numpy as np def schedule(jobs: list[dict]) -> list[int]: def calculate_total_tardiness(schedule): current_time = 0 total_tardiness = 0 for job_id in schedule: job = next(job for job in jobs if job['id'] == job_id) current_time += job['processing_time'] tardiness = max(0, current_time - job['due_date']) total_tardiness += tardiness return total_tardiness def neighbor(schedule): new_schedule = copy.deepcopy(schedule) idx1, idx2 = random.sample(range(len(new_schedule)), 2) new_schedule[idx1], new_schedule[idx2] = new_schedule[idx2], new_schedule[idx1] return new_schedule initial_schedule = [job['id'] for job in sorted(jobs, key=lambda x: x['due_date'])] current_schedule = initial_schedule current_tardiness = calculate_total_tardiness(current_schedule) best_schedule = current_schedule best_tardiness = current_tardiness temperature = 1000 cooling_rate = 0.995 while temperature > 0.1: new_schedule = neighbor(current_schedule) new_tardiness = calculate_total_tardiness(new_schedule) delta = new_tardiness - current_tardiness if delta < 0 or math.exp(-delta / temperature) > random.random(): current_schedule = new_schedule current_tardiness = new_tardiness if new_tardiness < best_tardiness: best_schedule = new_schedule best_tardiness = new_tardiness temperature *= cooling_rate return best_schedule",
+    "score": null,
+    "success": false,
+    "error": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_8v7vk4zh\\agent_run.py\", line 27\n    ess(new_schedule) delta = new_tardiness - current_tardiness if delta < 0 or math.exp(-delta / temperature) > random.random(): current_schedule = new_schedule current_tardiness = new_tardiness if new_tardiness < best_tardiness: best_schedule = new_schedule best_tardiness = new_tardiness temperature *= cooling_rate return best_schedule\n                                           ^^^\nSyntaxError: invalid syntax\n",
+    "failure_reason": "syntax error \u2014 invalid Python syntax: invalid syntax",
+    "notes": "Fixed syntax errors and ensured the code returns a valid permutation of job IDs. (fixed after pre-test retry 1)",
+    "instance_scores": {},
+    "instance_errors": {
+      "20jobs_t0.4": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_8v7vk4zh\\agent_run.py\", line 27\n    ess(new_schedule) delta = new_tardiness - current_tardiness if delta < 0 or math.exp(-delta / temperature) > random.random(): current_schedule = new_schedule current_tardiness = new_tardiness if new_tardiness < best_tardiness: best_schedule = new_schedule best_tardiness = new_tardiness temperature *= cooling_rate return best_schedule\n                                           ^^^\nSyntaxError: invalid syntax\n",
+      "50jobs_t0.6": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_a0y8p7al\\agent_run.py\", line 27\n    ess(new_schedule) delta = new_tardiness - current_tardiness if delta < 0 or math.exp(-delta / temperature) > random.random(): current_schedule = new_schedule current_tardiness = new_tardiness if new_tardiness < best_tardiness: best_schedule = new_schedule best_tardiness = new_tardiness temperature *= cooling_rate return best_schedule\n                                           ^^^\nSyntaxError: invalid syntax\n",
+      "100jobs_t0.8": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_uz870cuc\\agent_run.py\", line 27\n    ess(new_schedule) delta = new_tardiness - current_tardiness if delta < 0 or math.exp(-delta / temperature) > random.random(): current_schedule = new_schedule current_tardiness = new_tardiness if new_tardiness < best_tardiness: best_schedule = new_schedule best_tardiness = new_tardiness temperature *= cooling_rate return best_schedule\n                                           ^^^\nSyntaxError: invalid syntax\n"
+    }
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 1,
+    "agent_id": 2,
+    "mode": "explore",
+    "direction": "Use an Ant Colony Optimization method with pheromone evaporation rate of 0.5.",
+    "source_refs": [],
+    "approach": "Ant Colony Optimization for minimizing total tardiness",
+    "code": "import random import numpy as np from scipy.special import softmax def schedule(jobs: list[dict]) -> list[int]:     num_ants = 10     num_iterations = 100     evaporation_rate = 0.5     alpha = 1     beta = 2     Q = 100     pheromones = np.ones((len(jobs), len(jobs)))     best_schedule = None     best_tardiness = float('inf')      def calculate_tardiness(schedule):         current_time = 0         total_tardiness = 0         for job_id in schedule:             job = next(job for job in jobs if job['id'] == job_id)             current_time += job['processing_time']             tardiness = max(0, current_time - job['due_date'])             total_tardiness += tardiness         return total_tardiness      for iteration in range(num_iterations):         ant_schedules = []         ant_tardinesses = []          for ant in range(num_ants):             visited = set()             schedule = [random.choice(jobs)['id']]             while len(schedule) < len(jobs):                 last_job_id = schedule[-1]                 last_job_index = next(i for i, job in enumerate(jobs) if job['id'] == last_job_id)                 probabilities = []                 for job_index, job in enumerate(jobs):                     if job['id'] not in visited:                         eta = 1 / (1 + max(0, job['due_date'] - (sum(jobs[k]['processing_time'] for k in range(len(schedule))) + job['processing_time'])))                         prob = (pheromones[last_job_index][job_index] ** alpha) * (eta ** beta)                         probabilities.append(prob)                     else:                         probabilities.append(0)                 probabilities = softmax(probabilities).tolist()                 next_job_id = np.random.choice([job['id'] for job in jobs if job['id'] not in visited], p=probabilities)                 schedule.append(next_job_id)                 visited.add(next_job_id)              ant_schedules.append(schedule)             ant_tardinesses.append(calculate_tardiness(schedule))              if ant_tardinesses[-1] < best_tardiness:                 best_tardiness = ant_tardinesses[-1]                 best_schedule = ant_schedules[-1]          pheromones *= (1 - evaporation_rate)         for i, schedule in enumerate(ant_schedules):             for j in range(len(schedule) - 1):                 job_index_from = next(k for k, job in enumerate(jobs) if job['id'] == schedule[j])                 job_index_to = next(k for k, job in enumerate(jobs) if job['id'] == schedule[j + 1])                 pheromones[job_index_from][job_index_to] += Q / ant_tardinesses[i]      return best_schedule",
+    "score": null,
+    "success": false,
+    "error": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_i028atg5\\agent_run.py\", line 27\n    hedule))              if ant_tardinesses[-1] < best_tardiness:                 best_tardiness = ant_tardinesses[-1]                 best_schedule = ant_schedules[-1]          pheromones *= (1 - evaporation_rate)         for i, schedule in enumerate(ant_schedules):             for j in range(len(schedule) - 1):                 job_index_from = next(k for k, job in enumerate(jobs) if job['id'] == schedule[j])                 job_index_to = next(k for k, job in enumerate(jobs) if job['id'] == schedule[j + 1])                 pheromones[job_index_from][job_index_to] += Q / ant_tardinesses[i]      return best_schedule\n                  ^^^^^^\nSyntaxError: invalid syntax\n",
+    "failure_reason": "syntax error \u2014 invalid Python syntax: invalid syntax",
+    "notes": "Fixed the syntax error by correcting the line causing the issue. Ensured that each ant constructs a valid schedule with unique job IDs. (fixed after pre-test retry 1)",
+    "instance_scores": {},
+    "instance_errors": {
+      "20jobs_t0.4": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_i028atg5\\agent_run.py\", line 27\n    hedule))              if ant_tardinesses[-1] < best_tardiness:                 best_tardiness = ant_tardinesses[-1]                 best_schedule = ant_schedules[-1]          pheromones *= (1 - evaporation_rate)         for i, schedule in enumerate(ant_schedules):             for j in range(len(schedule) - 1):                 job_index_from = next(k for k, job in enumerate(jobs) if job['id'] == schedule[j])                 job_index_to = next(k for k, job in enumerate(jobs) if job['id'] == schedule[j + 1])                 pheromones[job_index_from][job_index_to] += Q / ant_tardinesses[i]      return best_schedule\n                  ^^^^^^\nSyntaxError: invalid syntax\n",
+      "50jobs_t0.6": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_523_ij4s\\agent_run.py\", line 27\n    hedule))              if ant_tardinesses[-1] < best_tardiness:                 best_tardiness = ant_tardinesses[-1]                 best_schedule = ant_schedules[-1]          pheromones *= (1 - evaporation_rate)         for i, schedule in enumerate(ant_schedules):             for j in range(len(schedule) - 1):                 job_index_from = next(k for k, job in enumerate(jobs) if job['id'] == schedule[j])                 job_index_to = next(k for k, job in enumerate(jobs) if job['id'] == schedule[j + 1])                 pheromones[job_index_from][job_index_to] += Q / ant_tardinesses[i]      return best_schedule\n                  ^^^^^^\nSyntaxError: invalid syntax\n",
+      "100jobs_t0.8": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_w7jpa8rw\\agent_run.py\", line 27\n    hedule))              if ant_tardinesses[-1] < best_tardiness:                 best_tardiness = ant_tardinesses[-1]                 best_schedule = ant_schedules[-1]          pheromones *= (1 - evaporation_rate)         for i, schedule in enumerate(ant_schedules):             for j in range(len(schedule) - 1):                 job_index_from = next(k for k, job in enumerate(jobs) if job['id'] == schedule[j])                 job_index_to = next(k for k, job in enumerate(jobs) if job['id'] == schedule[j + 1])                 pheromones[job_index_from][job_index_to] += Q / ant_tardinesses[i]      return best_schedule\n                  ^^^^^^\nSyntaxError: invalid syntax\n"
+    }
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 1,
+    "agent_id": 3,
+    "mode": "explore",
+    "direction": "Develop a Particle Swarm Optimization technique with inertia weight of 0.7.",
+    "source_refs": [],
+    "approach": "Use Particle Swarm Optimization to minimize total tardiness",
+    "code": "import random, numpy as np, copy from functools import reduce def schedule(jobs: list[dict]) -> list[int]: def evaluate_schedule(schedule, jobs): completion_times = [] current_time = 0 for job_id in schedule: job = next((j for j in jobs if j['id'] == job_id), None) current_time += job['processing_time'] completion_times.append(current_time) tardiness = sum(max(0, ct - job['due_date']) for ct, job in zip(completion_times, jobs)) return tardiness def generate_random_schedule(jobs): return random.sample([job['id'] for job in jobs], len(jobs)) def update_velocity_and_position(particle, best_personal_pos, best_global_pos, w=0.7, c1=1.5, c2=1.5): r1, r2 = random.random(), random.random() velocity = [w * v + c1 * r1 * (bp - p) + c2 * r2 * (bg - p) for v, bp, p, bg in zip(particle['velocity'], best_personal_pos, particle['position'], best_global_pos)] position = [int(round(v)) for v in velocity] position = list(set(position) | set(best_personal_pos))[:len(best_personal_pos)] return velocity, position def initialize_particles(jobs, num_particles): particles = [] for _ in range(num_particles): pos = generate_random_schedule(jobs) vel = [0] * len(pos) particles.append({'position': pos, 'velocity': vel, 'best_position': pos, 'best_score': float('inf')}) return particles def particle_swarm_optimization(jobs, num_particles=30, num_iterations=100): particles = initialize_particles(jobs, num_particles) best_global_position = None best_global_score = float('inf') for iteration in range(num_iterations): for particle in particles: score = evaluate_schedule(particle['position'], jobs) if score < particle['best_score']: particle['best_score'] = score particle['best_position'] = particle['position'] if score < best_global_score: best_global_score = score best_global_position = particle['best_position'] for particle in particles: particle['velocity'], particle['position'] = update_velocity_and_position(particle, particle['best_position'], best_global_position) return best_global_position return particle_swarm_optimization(jobs)",
+    "score": null,
+    "success": false,
+    "error": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_4ksut25h\\agent_run.py\", line 27\n    n return particle_swarm_optimization(jobs)\n                                     ^^^^\nSyntaxError: invalid syntax\n",
+    "failure_reason": "syntax error \u2014 invalid Python syntax: invalid syntax",
+    "notes": "Revised to fix syntax errors and ensure valid permutations of job IDs. (fixed after pre-test retry 1)",
+    "instance_scores": {},
+    "instance_errors": {
+      "20jobs_t0.4": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_4ksut25h\\agent_run.py\", line 27\n    n return particle_swarm_optimization(jobs)\n                                     ^^^^\nSyntaxError: invalid syntax\n",
+      "50jobs_t0.6": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_uby457os\\agent_run.py\", line 27\n    n return particle_swarm_optimization(jobs)\n                                     ^^^^\nSyntaxError: invalid syntax\n",
+      "100jobs_t0.8": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_fp6zh16f\\agent_run.py\", line 27\n    n return particle_swarm_optimization(jobs)\n                                     ^^^^\nSyntaxError: invalid syntax\n"
+    }
+  }
+]

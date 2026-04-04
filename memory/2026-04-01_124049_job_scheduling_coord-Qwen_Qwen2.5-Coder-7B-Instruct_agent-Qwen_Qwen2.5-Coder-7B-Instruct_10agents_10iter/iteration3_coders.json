@@ -1,0 +1,237 @@
+[
+  {
+    "record_type": "agent_attempt",
+    "iteration": 3,
+    "agent_id": 0,
+    "mode": "explore",
+    "direction": "Implement a genetic algorithm with a focus on correct syntax and proper initialization of the population.",
+    "source_refs": [],
+    "approach": "Genetic Algorithm for Job Scheduling",
+    "code": "import random from operator import attrgetter from typing import List from math import inf class Job: def __init__(self, id: int, processing_time: int, due_date: int): self.id = id self.processing_time = processing_time self.due_date = due_date def calculate_tardiness(self, start_time: int) -> int: completion_time = start_time + self.processing_time return max(completion_time - self.due_date, 0) class Population: def __init__(self, jobs: List[Job], pop_size: int): self.jobs = jobs self.pop_size = pop_size self.population = self.initialize_population() def initialize_population(self) -> List[List[int]]: return [random.sample(range(len(self.jobs)), len(self.jobs)) for _ in range(self.pop_size)] def fitness_function(self, chromosome: List[int]) -> float: start_time = 0 total_tardiness = 0 for job_id in chromosome: job = self.jobs[job_id] total_tardiness += job.calculate_tardiness(start_time) start_time += job.processing_time return total_tardiness def select_parents(self, fitness_scores: List[float]) -> List[List[int]]: selected_indices = random.choices(range(self.pop_size), weights=[1 / score for score in fitness_scores], k=self.pop_size) return [self.population[i] for i in selected_indices] def crossover(self, parent1: List[int], parent2: List[int]) -> List[List[int]]: crossover_point = random.randint(1, len(parent1) - 2) child1 = parent1[:crossover_point] + [job for job in parent2 if job not in child1] child2 = parent2[:crossover_point] + [job for job in parent1 if job not in child2] return [child1, child2] def mutate(self, chromosome: List[int], mutation_rate: float) -> List[int]: for i in range(len(chromosome)): if random.random() < mutation_rate: swap_with = random.randint(0, len(chromosome) - 1) chromosome[i], chromosome[swap_with] = chromosome[swap_with], chromosome[i] return chromosome def evolve(self, generations: int, mutation_rate: float) -> List[int]: for generation in range(generations): fitness_scores = [self.fitness_function(chromosome) for chromosome in self.population] parents = self.select_parents(fitness_scores) offspring = [] for i in range(0, self.pop_size, 2): child1, child2 = self.crossover(parents[i], parents[i+1]) child1 = self.mutate(child1, mutation_rate) child2 = self.mutate(child2, mutation_rate) offspring.extend([child1, child2]) self.population = offspring best_chromosome = min(self.population, key=self.fitness_function) return best_chromosome def schedule(jobs: List[dict]) -> List[int]: job_objects = [Job(job['id'], job['processing_time'], job['due_date']) for job in jobs] pop = Population(job_objects, pop_size=100) best_schedule = pop.evolve(generations=1000, mutation_rate=0.01) return best_schedule",
+    "score": null,
+    "success": false,
+    "error": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_cc10gckz\\agent_run.py\", line 27\n    in self.population] parents = self.select_parents(fitness_scores) offspring = [] for i in range(0, self.pop_size, 2): child1, child2 = self.crossover(parents[i], parents[i+1]) child1 = self.mutate(child1, mutation_rate) child2 = self.mutate(child2, mutation_rate) offspring.extend([child1, child2]) self.population = offspring best_chromosome = min(self.population, key=self.fitness_function) return best_chromosome def schedule(jobs: List[dict]) -> List[int]: job_objects = [Job(job['id'], job['processing_time'], job['due_date']) for job in jobs] pop = Population(job_objects, pop_size=100) best_schedule = pop.evolve(generations=1000, mutation_rate=0.01) return best_schedule\n                 ^^^^\nSyntaxError: invalid syntax\n",
+    "failure_reason": "syntax error \u2014 invalid Python syntax: invalid syntax",
+    "notes": "This genetic algorithm evolves populations of job schedules over multiple generations to minimize total tardiness. It initializes a population of random permutations of job IDs, then iteratively selects, crosses, and mutates individuals based on their fitness scores. (fixed after pre-test retry 3)",
+    "instance_scores": {},
+    "instance_errors": {
+      "20jobs_t0.4": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_cc10gckz\\agent_run.py\", line 27\n    in self.population] parents = self.select_parents(fitness_scores) offspring = [] for i in range(0, self.pop_size, 2): child1, child2 = self.crossover(parents[i], parents[i+1]) child1 = self.mutate(child1, mutation_rate) child2 = self.mutate(child2, mutation_rate) offspring.extend([child1, child2]) self.population = offspring best_chromosome = min(self.population, key=self.fitness_function) return best_chromosome def schedule(jobs: List[dict]) -> List[int]: job_objects = [Job(job['id'], job['processing_time'], job['due_date']) for job in jobs] pop = Population(job_objects, pop_size=100) best_schedule = pop.evolve(generations=1000, mutation_rate=0.01) return best_schedule\n                 ^^^^\nSyntaxError: invalid syntax\n",
+      "50jobs_t0.6": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_g4cyd9tk\\agent_run.py\", line 27\n    in self.population] parents = self.select_parents(fitness_scores) offspring = [] for i in range(0, self.pop_size, 2): child1, child2 = self.crossover(parents[i], parents[i+1]) child1 = self.mutate(child1, mutation_rate) child2 = self.mutate(child2, mutation_rate) offspring.extend([child1, child2]) self.population = offspring best_chromosome = min(self.population, key=self.fitness_function) return best_chromosome def schedule(jobs: List[dict]) -> List[int]: job_objects = [Job(job['id'], job['processing_time'], job['due_date']) for job in jobs] pop = Population(job_objects, pop_size=100) best_schedule = pop.evolve(generations=1000, mutation_rate=0.01) return best_schedule\n                 ^^^^\nSyntaxError: invalid syntax\n",
+      "100jobs_t0.8": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_0tnl85tg\\agent_run.py\", line 27\n    in self.population] parents = self.select_parents(fitness_scores) offspring = [] for i in range(0, self.pop_size, 2): child1, child2 = self.crossover(parents[i], parents[i+1]) child1 = self.mutate(child1, mutation_rate) child2 = self.mutate(child2, mutation_rate) offspring.extend([child1, child2]) self.population = offspring best_chromosome = min(self.population, key=self.fitness_function) return best_chromosome def schedule(jobs: List[dict]) -> List[int]: job_objects = [Job(job['id'], job['processing_time'], job['due_date']) for job in jobs] pop = Population(job_objects, pop_size=100) best_schedule = pop.evolve(generations=1000, mutation_rate=0.01) return best_schedule\n                 ^^^^\nSyntaxError: invalid syntax\n"
+    }
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 3,
+    "agent_id": 1,
+    "mode": "exploit",
+    "direction": "Refine the genetic algorithm implementation by addressing the syntax errors identified in the previous iteration.",
+    "source_refs": [
+      {
+        "agent_id": 0,
+        "iteration": 2
+      }
+    ],
+    "approach": "Use genetic algorithm to find an optimal job schedule",
+    "code": "import random from typing import List, Dict import numpy as np def calculate_total_tardiness(schedule: List[int], jobs: List[Dict[str, int]]) -> float: completion_time = 0 total_tardiness = 0 for job_id in schedule: job = jobs[job_id] completion_time += job['processing_time'] tardiness = max(0, completion_time - job['due_date']) total_tardiness += tardiness return total_tardiness def generate_initial_population(population_size: int, job_ids: List[int]) -> List[List[int]]: population = [] for _ in range(population_size): np.random.shuffle(job_ids) population.append(job_ids.copy()) return population def selection(population: List[List[int]], jobs: List[Dict[str, int]], tournament_size: int) -> List[List[int]]: selected = [] for _ in range(len(population)): participants = random.sample(population, tournament_size) best = min(participants, key=lambda x: calculate_total_tardiness(x, jobs)) selected.append(best) return selected def crossover(parent1: List[int], parent2: List[int]) -> List[int]: crossover_point = random.randint(1, len(parent1) - 1) child = parent1[:crossover_point] for gene in parent2: if gene not in child: child.append(gene) return child def mutation(individual: List[int], mutation_rate: float) -> List[int]: for i in range(len(individual)): if random.random() < mutation_rate: other_index = random.randint(0, len(individual) - 1) individual[i], individual[other_index] = individual[other_index], individual[i] return individual def schedule(jobs: List[Dict[str, int]]) -> List[int]: job_ids = list(range(len(jobs))) population_size = 50 tournament_size = 3 mutation_rate = 0.01 generations = 100 population = generate_initial_population(population_size, job_ids) for generation in range(generations): selected = selection(population, jobs, tournament_size) offspring = [] for i in range(0, population_size, 2): parent1, parent2 = selected[i], selected[i + 1] child1 = crossover(parent1, parent2) child2 = crossover(parent2, parent1) offspring.extend([child1, child2]) for i in range(population_size): offspring[i] = mutation(offspring[i], mutation_rate) population = offspring best_schedule = min(population, key=lambda x: calculate_total_tardiness(x, jobs)) return best_schedule",
+    "score": null,
+    "success": false,
+    "error": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_vq04wydx\\agent_run.py\", line 27\n    for i in range(population_size): offspring[i] = mutation(offspring[i], mutation_rate) population = offspring best_schedule = min(population, key=lambda x: calculate_total_tardiness(x, jobs)) return best_schedule\n                 ^^^^\nSyntaxError: invalid syntax\n",
+    "failure_reason": "syntax error \u2014 invalid Python syntax: invalid syntax",
+    "notes": "This genetic algorithm attempts to find the optimal job schedule by evolving a population of potential schedules over multiple generations. (fixed after pre-test retry 3)",
+    "instance_scores": {},
+    "instance_errors": {
+      "20jobs_t0.4": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_vq04wydx\\agent_run.py\", line 27\n    for i in range(population_size): offspring[i] = mutation(offspring[i], mutation_rate) population = offspring best_schedule = min(population, key=lambda x: calculate_total_tardiness(x, jobs)) return best_schedule\n                 ^^^^\nSyntaxError: invalid syntax\n",
+      "50jobs_t0.6": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_hd0bfs1v\\agent_run.py\", line 27\n    for i in range(population_size): offspring[i] = mutation(offspring[i], mutation_rate) population = offspring best_schedule = min(population, key=lambda x: calculate_total_tardiness(x, jobs)) return best_schedule\n                 ^^^^\nSyntaxError: invalid syntax\n",
+      "100jobs_t0.8": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_cwf5q70l\\agent_run.py\", line 27\n    for i in range(population_size): offspring[i] = mutation(offspring[i], mutation_rate) population = offspring best_schedule = min(population, key=lambda x: calculate_total_tardiness(x, jobs)) return best_schedule\n                 ^^^^\nSyntaxError: invalid syntax\n"
+    }
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 3,
+    "agent_id": 2,
+    "mode": "explore",
+    "direction": "Develop a hybrid approach combining simulated annealing with a lookahead strategy to improve job scheduling efficiency.",
+    "source_refs": [],
+    "approach": "Simulated Annealing",
+    "code": "import random, math, copy from typing import List, Dict def lookahead_schedule(jobs: List[Dict[str, int]]) -> List[int]: def calculate_total_tardiness(schedule: List[int]) -> int: completion_times = {job['id']: 0 for job in jobs} for i in schedule: completion_times[i] += jobs[i]['processing_time'] return sum(max(0, completion_times[j] - jobs[j]['due_date']) for j in range(len(schedule))) def generate_initial_solution(jobs: List[Dict[str, int]]) -> List[int]: return list(range(len(jobs))) def acceptance_probability(old_energy: int, new_energy: int, temperature: float) -> float: return math.exp((old_energy - new_energy) / temperature) def find_best_neighbor(schedule: List[int]) -> List[int]: best_neighbor = schedule.copy() min_tardiness = calculate_total_tardiness(best_neighbor) for _ in range(10): neighbor = copy.deepcopy(schedule) idx1, idx2 = random.sample(range(len(neighbor)), 2) neighbor[idx1], neighbor[idx2] = neighbor[idx2], neighbor[idx1] current_tardiness = calculate_total_tardiness(neighbor) if current_tardiness < min_tardiness: min_tardiness = current_tardiness best_neighbor = neighbor return best_neighbor initial_temperature = len(jobs) ** 2 cooling_rate = 0.9 solution = generate_initial_solution(jobs) temperature = initial_temperature while temperature > 1e-10: old_tardiness = calculate_total_tardiness(solution) new_solution = find_best_neighbor(solution) new_tardiness = calculate_total_tardiness(new_solution) if new_tardiness < old_tardiness or random.random() < acceptance_probability(old_tardiness, new_tardiness, temperature): solution = new_solution temperature *= cooling_rate return solution if __name__ == '__main__': jobs = [{'id': 0, 'processing_time': 2, 'due_date': 5}, {'id': 1, 'processing_time': 3, 'due_date': 8}, {'id': 2, 'processing_time': 1, 'due_date': 3}] print(lookahead_schedule(jobs))",
+    "score": null,
+    "success": false,
+    "error": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_2vrh329j\\agent_run.py\", line 27\n    iness(neighbor) if current_tardiness < min_tardiness: min_tardiness = current_tardiness best_neighbor = neighbor return best_neighbor initial_temperature = len(jobs) ** 2 cooling_rate = 0.9 solution = generate_initial_solution(jobs) temperature = initial_temperature while temperature > 1e-10: old_tardiness = calculate_total_tardiness(solution) new_solution = find_best_neighbor(solution) new_tardiness = calculate_total_tardiness(new_solution) if new_tardiness < old_tardiness or random.random() < acceptance_probability(old_tardiness, new_tardiness, temperature): solution = new_solution temperature *= cooling_rate return solution if __name__ == '__main__': jobs = [{'id': 0, 'processing_time': 2, 'due_date': 5}, {'id': 1, 'processing_time': 3, 'due_date': 8}, {'id': 2, 'processing_time': 1, 'due_date': 3}] print(lookahead_schedule(jobs))\n                              ^^^^\nSyntaxError: invalid syntax\n",
+    "failure_reason": "syntax error \u2014 invalid Python syntax: invalid syntax",
+    "notes": "The simulated annealing approach was used to find a schedule that minimizes total tardiness. The function generates an initial random schedule and iteratively tries to improve it by swapping two jobs. If the new schedule results in less tardiness or meets the acceptance probability criterion, it becomes the current solution. This process is repeated until the temperature reaches a very low value. (fixed after pre-test retry 3)",
+    "instance_scores": {},
+    "instance_errors": {
+      "20jobs_t0.4": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_2vrh329j\\agent_run.py\", line 27\n    iness(neighbor) if current_tardiness < min_tardiness: min_tardiness = current_tardiness best_neighbor = neighbor return best_neighbor initial_temperature = len(jobs) ** 2 cooling_rate = 0.9 solution = generate_initial_solution(jobs) temperature = initial_temperature while temperature > 1e-10: old_tardiness = calculate_total_tardiness(solution) new_solution = find_best_neighbor(solution) new_tardiness = calculate_total_tardiness(new_solution) if new_tardiness < old_tardiness or random.random() < acceptance_probability(old_tardiness, new_tardiness, temperature): solution = new_solution temperature *= cooling_rate return solution if __name__ == '__main__': jobs = [{'id': 0, 'processing_time': 2, 'due_date': 5}, {'id': 1, 'processing_time': 3, 'due_date': 8}, {'id': 2, 'processing_time': 1, 'due_date': 3}] print(lookahead_schedule(jobs))\n                              ^^^^\nSyntaxError: invalid syntax\n",
+      "50jobs_t0.6": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm__09upevn\\agent_run.py\", line 27\n    iness(neighbor) if current_tardiness < min_tardiness: min_tardiness = current_tardiness best_neighbor = neighbor return best_neighbor initial_temperature = len(jobs) ** 2 cooling_rate = 0.9 solution = generate_initial_solution(jobs) temperature = initial_temperature while temperature > 1e-10: old_tardiness = calculate_total_tardiness(solution) new_solution = find_best_neighbor(solution) new_tardiness = calculate_total_tardiness(new_solution) if new_tardiness < old_tardiness or random.random() < acceptance_probability(old_tardiness, new_tardiness, temperature): solution = new_solution temperature *= cooling_rate return solution if __name__ == '__main__': jobs = [{'id': 0, 'processing_time': 2, 'due_date': 5}, {'id': 1, 'processing_time': 3, 'due_date': 8}, {'id': 2, 'processing_time': 1, 'due_date': 3}] print(lookahead_schedule(jobs))\n                              ^^^^\nSyntaxError: invalid syntax\n",
+      "100jobs_t0.8": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_37e2vsh3\\agent_run.py\", line 27\n    iness(neighbor) if current_tardiness < min_tardiness: min_tardiness = current_tardiness best_neighbor = neighbor return best_neighbor initial_temperature = len(jobs) ** 2 cooling_rate = 0.9 solution = generate_initial_solution(jobs) temperature = initial_temperature while temperature > 1e-10: old_tardiness = calculate_total_tardiness(solution) new_solution = find_best_neighbor(solution) new_tardiness = calculate_total_tardiness(new_solution) if new_tardiness < old_tardiness or random.random() < acceptance_probability(old_tardiness, new_tardiness, temperature): solution = new_solution temperature *= cooling_rate return solution if __name__ == '__main__': jobs = [{'id': 0, 'processing_time': 2, 'due_date': 5}, {'id': 1, 'processing_time': 3, 'due_date': 8}, {'id': 2, 'processing_time': 1, 'due_date': 3}] print(lookahead_schedule(jobs))\n                              ^^^^\nSyntaxError: invalid syntax\n"
+    }
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 3,
+    "agent_id": 3,
+    "mode": "exploit",
+    "direction": "Optimize the simulated annealing algorithm by fine-tuning the initial temperature and cooling rate parameters.",
+    "source_refs": [
+      {
+        "agent_id": 2,
+        "iteration": 2
+      }
+    ],
+    "approach": "Simulated Annealing Algorithm for Job Scheduling",
+    "code": "import random, math def schedule(jobs: list[dict]) -> list[int]: def objective(individual): tardiness = 0 current_time = 0 for job_id in individual: processing_time = jobs[job_id]['processing_time'] current_time += processing_time tardiness += max(0, current_time - jobs[job_id]['due_date']) return tardiness pop_size = len(jobs) population = [random.sample(range(pop_size), pop_size) for _ in range(pop_size)] T = 1000 alpha = 0.95 while T > 1e-5: for _ in range(pop_size): parent1, parent2 = random.sample(population, 2) child = parent1[:] point = random.randint(0, pop_size - 1) child[point:] = parent2[point:] pm = 0.1 if random.random() < pm: mutation_point = random.randint(0, pop_size - 1) child[mutation_point] = random.randint(0, pop_size - 1) obj_parent1 = objective(parent1) obj_parent2 = objective(parent2) obj_child = objective(child) if obj_child < obj_parent1 or random.random() < math.exp((obj_parent1 - obj_child) / T): population.remove(parent1) population.append(child) elif obj_child < obj_parent2 or random.random() < math.exp((obj_parent2 - obj_child) / T): population.remove(parent2) population.append(child) T *= alpha return [job['id'] for job in sorted(population[0], key=lambda x: jobs[x]['id'])]",
+    "score": null,
+    "success": false,
+    "error": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_l2w0k44f\\agent_run.py\", line 27\n    hild < obj_parent2 or random.random() < math.exp((obj_parent2 - obj_child) / T): population.remove(parent2) population.append(child) T *= alpha return [job['id'] for job in sorted(population[0], key=lambda x: jobs[x]['id'])]\n                        ^^^\nSyntaxError: invalid syntax\n",
+    "failure_reason": "syntax error \u2014 invalid Python syntax: invalid syntax",
+    "notes": "The Simulated Annealing algorithm is used to find a near-optimal solution to the job scheduling problem by iteratively improving a candidate solution with a certain probability based on the difference in objective values. (fixed after pre-test retry 3)",
+    "instance_scores": {},
+    "instance_errors": {
+      "20jobs_t0.4": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_l2w0k44f\\agent_run.py\", line 27\n    hild < obj_parent2 or random.random() < math.exp((obj_parent2 - obj_child) / T): population.remove(parent2) population.append(child) T *= alpha return [job['id'] for job in sorted(population[0], key=lambda x: jobs[x]['id'])]\n                        ^^^\nSyntaxError: invalid syntax\n",
+      "50jobs_t0.6": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_wfpggxgt\\agent_run.py\", line 27\n    hild < obj_parent2 or random.random() < math.exp((obj_parent2 - obj_child) / T): population.remove(parent2) population.append(child) T *= alpha return [job['id'] for job in sorted(population[0], key=lambda x: jobs[x]['id'])]\n                        ^^^\nSyntaxError: invalid syntax\n",
+      "100jobs_t0.8": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_658oa31n\\agent_run.py\", line 27\n    hild < obj_parent2 or random.random() < math.exp((obj_parent2 - obj_child) / T): population.remove(parent2) population.append(child) T *= alpha return [job['id'] for job in sorted(population[0], key=lambda x: jobs[x]['id'])]\n                        ^^^\nSyntaxError: invalid syntax\n"
+    }
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 3,
+    "agent_id": 4,
+    "mode": "explore",
+    "direction": "Implement a particle swarm optimization (PSO) algorithm for job scheduling and evaluate its performance against other methods.",
+    "source_refs": [],
+    "approach": "Genetic Algorithm for Job Scheduling",
+    "code": "import random as rd import numpy as np def schedule(jobs: list[dict]) -> list[int]: def fitness(sequence): completion_times = [0] * len(jobs) total_tardiness = 0 for i in range(len(sequence)): job_id = sequence[i] job = jobs[job_id] if i > 0: completion_times[job_id] = completion_times[sequence[i-1]] + jobs[sequence[i-1]]['processing_time'] completion_times[job_id] += job['processing_time'] tardiness = max(0, completion_times[job_id] - job['due_date']) total_tardiness += tardiness return total_tardiness population_size = 50 generations = 100 mutation_rate = 0.1 population = [rd.sample(range(len(jobs)), len(jobs)) for _ in range(population_size)] for generation in range(generations): scores = [(fitness(p), p) for p in population] sorted_population = [p for _, p in sorted(scores, key=lambda x: x[0])] population = sorted_population[:population_size//2] parents = population[:population_size//4] children = [] while len(children) < population_size - len(parents): parent1, parent2 = rd.choices(parents, k=2) child = parent1[:len(parent1)//2] + parent2[len(parent2)//2:] idx = rd.randint(0, len(child)//2) child[idx:] = [j for j in sorted(child[idx:], key=lambda x: jobs[x]['due_date']) if j not in child[:idx]] if rd.random() < mutation_rate: idx1, idx2 = rd.sample(range(len(child)), 2) child[idx1], child[idx2] = child[idx2], child[idx1] children.append(child) population.extend(children) best_sequence = sorted_population[0] return best_sequence def total_tardiness(schedule_func, jobs, sequence): completion_times = [0] * len(jobs) total_tardiness = 0 for i in range(len(sequence)): job_id = sequence[i] job = jobs[job_id] if i > 0: completion_times[job_id] = completion_times[sequence[i-1]] + jobs[sequence[i-1]]['processing_time'] completion_times[job_id] += job['processing_time'] tardiness = max(0, completion_times[job_id] - job['due_date']) total_tardiness += tardiness return total_tardiness",
+    "score": null,
+    "success": false,
+    "error": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_1ak3t9bz\\agent_run.py\", line 27\n    es(parents, k=2) child = parent1[:len(parent1)//2] + parent2[len(parent2)//2:] idx = rd.randint(0, len(child)//2) child[idx:] = [j for j in sorted(child[idx:], key=lambda x: jobs[x]['due_date']) if j not in child[:idx]] if rd.random() < mutation_rate: idx1, idx2 = rd.sample(range(len(child)), 2) child[idx1], child[idx2] = child[idx2], child[idx1] children.append(child) population.extend(children) best_sequence = sorted_population[0] return best_sequence def total_tardiness(schedule_func, jobs, sequence): completion_times = [0] * len(jobs) total_tardiness = 0 for i in range(len(sequence)): job_id = sequence[i] job = jobs[job_id] if i > 0: completion_times[job_id] = completion_times[sequence[i-1]] + jobs[sequence[i-1]]['processing_time'] completion_times[job_id] += job['processing_time'] tardiness = max(0, completion_times[job_id] - job['due_date']) total_tardiness += tardiness return total_tardiness\n                        ^^^^^^\nSyntaxError: invalid syntax\n",
+    "failure_reason": "syntax error \u2014 invalid Python syntax: invalid syntax",
+    "notes": "The genetic algorithm aims to find a schedule that minimizes total tardiness by iteratively evolving a population of potential schedules through selection, crossover, and mutation. (fixed after pre-test retry 3)",
+    "instance_scores": {},
+    "instance_errors": {
+      "20jobs_t0.4": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_1ak3t9bz\\agent_run.py\", line 27\n    es(parents, k=2) child = parent1[:len(parent1)//2] + parent2[len(parent2)//2:] idx = rd.randint(0, len(child)//2) child[idx:] = [j for j in sorted(child[idx:], key=lambda x: jobs[x]['due_date']) if j not in child[:idx]] if rd.random() < mutation_rate: idx1, idx2 = rd.sample(range(len(child)), 2) child[idx1], child[idx2] = child[idx2], child[idx1] children.append(child) population.extend(children) best_sequence = sorted_population[0] return best_sequence def total_tardiness(schedule_func, jobs, sequence): completion_times = [0] * len(jobs) total_tardiness = 0 for i in range(len(sequence)): job_id = sequence[i] job = jobs[job_id] if i > 0: completion_times[job_id] = completion_times[sequence[i-1]] + jobs[sequence[i-1]]['processing_time'] completion_times[job_id] += job['processing_time'] tardiness = max(0, completion_times[job_id] - job['due_date']) total_tardiness += tardiness return total_tardiness\n                        ^^^^^^\nSyntaxError: invalid syntax\n",
+      "50jobs_t0.6": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_nlhv8i48\\agent_run.py\", line 27\n    es(parents, k=2) child = parent1[:len(parent1)//2] + parent2[len(parent2)//2:] idx = rd.randint(0, len(child)//2) child[idx:] = [j for j in sorted(child[idx:], key=lambda x: jobs[x]['due_date']) if j not in child[:idx]] if rd.random() < mutation_rate: idx1, idx2 = rd.sample(range(len(child)), 2) child[idx1], child[idx2] = child[idx2], child[idx1] children.append(child) population.extend(children) best_sequence = sorted_population[0] return best_sequence def total_tardiness(schedule_func, jobs, sequence): completion_times = [0] * len(jobs) total_tardiness = 0 for i in range(len(sequence)): job_id = sequence[i] job = jobs[job_id] if i > 0: completion_times[job_id] = completion_times[sequence[i-1]] + jobs[sequence[i-1]]['processing_time'] completion_times[job_id] += job['processing_time'] tardiness = max(0, completion_times[job_id] - job['due_date']) total_tardiness += tardiness return total_tardiness\n                        ^^^^^^\nSyntaxError: invalid syntax\n",
+      "100jobs_t0.8": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_x405zp3o\\agent_run.py\", line 27\n    es(parents, k=2) child = parent1[:len(parent1)//2] + parent2[len(parent2)//2:] idx = rd.randint(0, len(child)//2) child[idx:] = [j for j in sorted(child[idx:], key=lambda x: jobs[x]['due_date']) if j not in child[:idx]] if rd.random() < mutation_rate: idx1, idx2 = rd.sample(range(len(child)), 2) child[idx1], child[idx2] = child[idx2], child[idx1] children.append(child) population.extend(children) best_sequence = sorted_population[0] return best_sequence def total_tardiness(schedule_func, jobs, sequence): completion_times = [0] * len(jobs) total_tardiness = 0 for i in range(len(sequence)): job_id = sequence[i] job = jobs[job_id] if i > 0: completion_times[job_id] = completion_times[sequence[i-1]] + jobs[sequence[i-1]]['processing_time'] completion_times[job_id] += job['processing_time'] tardiness = max(0, completion_times[job_id] - job['due_date']) total_tardiness += tardiness return total_tardiness\n                        ^^^^^^\nSyntaxError: invalid syntax\n"
+    }
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 3,
+    "agent_id": 5,
+    "mode": "exploit",
+    "direction": "Enhance the heuristic-based algorithm by incorporating a more sophisticated lookahead mechanism to better handle job dependencies.",
+    "source_refs": [
+      {
+        "agent_id": 4,
+        "iteration": 2
+      }
+    ],
+    "approach": "Use a priority queue to schedule jobs by their due dates and processing times to minimize total tardiness.",
+    "code": "from typing import List, Dict import heapq def schedule(jobs: List[Dict[str, int]]) -> List[int]: # Create a priority queue based on due date and processing time jobs_queue = [(job['due_date'], job['processing_time'], job['id']) for job in jobs] heapq.heapify(jobs_queue) schedule = [] current_time = 0 while jobs_queue: _, processing_time, job_id = heapq.heappop(jobs_queue) current_time += processing_time schedule.append(job_id) return schedule",
+    "score": null,
+    "success": false,
+    "error": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_tjuyr0tp\\agent_run.py\", line 27\n    from typing import List, Dict import heapq def schedule(jobs: List[Dict[str, int]]) -> List[int]: # Create a priority queue based on due date and processing time jobs_queue = [(job['due_date'], job['processing_time'], job['id']) for job in jobs] heapq.heapify(jobs_queue) schedule = [] current_time = 0 while jobs_queue: _, processing_time, job_id = heapq.heappop(jobs_queue) current_time += processing_time schedule.append(job_id) return schedule\n                                  ^^^^^^\nSyntaxError: invalid syntax\n",
+    "failure_reason": "syntax error \u2014 invalid Python syntax: invalid syntax",
+    "notes": "This approach ensures that jobs are processed according to their deadlines, minimizing tardiness. It uses a min-heap to always process the job with the earliest deadline first. (fixed after pre-test retry 3)",
+    "instance_scores": {},
+    "instance_errors": {
+      "20jobs_t0.4": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_tjuyr0tp\\agent_run.py\", line 27\n    from typing import List, Dict import heapq def schedule(jobs: List[Dict[str, int]]) -> List[int]: # Create a priority queue based on due date and processing time jobs_queue = [(job['due_date'], job['processing_time'], job['id']) for job in jobs] heapq.heapify(jobs_queue) schedule = [] current_time = 0 while jobs_queue: _, processing_time, job_id = heapq.heappop(jobs_queue) current_time += processing_time schedule.append(job_id) return schedule\n                                  ^^^^^^\nSyntaxError: invalid syntax\n",
+      "50jobs_t0.6": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_whr1j4e4\\agent_run.py\", line 27\n    from typing import List, Dict import heapq def schedule(jobs: List[Dict[str, int]]) -> List[int]: # Create a priority queue based on due date and processing time jobs_queue = [(job['due_date'], job['processing_time'], job['id']) for job in jobs] heapq.heapify(jobs_queue) schedule = [] current_time = 0 while jobs_queue: _, processing_time, job_id = heapq.heappop(jobs_queue) current_time += processing_time schedule.append(job_id) return schedule\n                                  ^^^^^^\nSyntaxError: invalid syntax\n",
+      "100jobs_t0.8": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_0theei6p\\agent_run.py\", line 27\n    from typing import List, Dict import heapq def schedule(jobs: List[Dict[str, int]]) -> List[int]: # Create a priority queue based on due date and processing time jobs_queue = [(job['due_date'], job['processing_time'], job['id']) for job in jobs] heapq.heapify(jobs_queue) schedule = [] current_time = 0 while jobs_queue: _, processing_time, job_id = heapq.heappop(jobs_queue) current_time += processing_time schedule.append(job_id) return schedule\n                                  ^^^^^^\nSyntaxError: invalid syntax\n"
+    }
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 3,
+    "agent_id": 6,
+    "mode": "explore",
+    "direction": "Develop a hybrid approach combining constraint programming with machine learning to predict job tardiness and optimize the schedule accordingly.",
+    "source_refs": [],
+    "approach": "Sort jobs by their due dates and return the sorted list of job IDs.",
+    "code": "def schedule(jobs: list[dict]) -> list[int]: jobs.sort(key=lambda x: x['due_date']) return [job['id'] for job in jobs]",
+    "score": null,
+    "success": false,
+    "error": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_qioykf_3\\agent_run.py\", line 27\n    def schedule(jobs: list[dict]) -> list[int]: jobs.sort(key=lambda x: x['due_date']) return [job['id'] for job in jobs]\n                                                                                        ^^^^^^\nSyntaxError: invalid syntax\n",
+    "failure_reason": "syntax error \u2014 invalid Python syntax: invalid syntax",
+    "notes": "This simple greedy approach sorts jobs by their due dates and schedules them accordingly. It minimizes the number of tardy jobs. (fixed after pre-test retry 3)",
+    "instance_scores": {},
+    "instance_errors": {
+      "20jobs_t0.4": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_qioykf_3\\agent_run.py\", line 27\n    def schedule(jobs: list[dict]) -> list[int]: jobs.sort(key=lambda x: x['due_date']) return [job['id'] for job in jobs]\n                                                                                        ^^^^^^\nSyntaxError: invalid syntax\n",
+      "50jobs_t0.6": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_lp44zp_u\\agent_run.py\", line 27\n    def schedule(jobs: list[dict]) -> list[int]: jobs.sort(key=lambda x: x['due_date']) return [job['id'] for job in jobs]\n                                                                                        ^^^^^^\nSyntaxError: invalid syntax\n",
+      "100jobs_t0.8": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_5o7mcu4r\\agent_run.py\", line 27\n    def schedule(jobs: list[dict]) -> list[int]: jobs.sort(key=lambda x: x['due_date']) return [job['id'] for job in jobs]\n                                                                                        ^^^^^^\nSyntaxError: invalid syntax\n"
+    }
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 3,
+    "agent_id": 7,
+    "mode": "exploit",
+    "direction": "Refine the MILP formulation by adding additional constraints to improve the quality of the solution.",
+    "source_refs": [
+      {
+        "agent_id": 6,
+        "iteration": 2
+      }
+    ],
+    "approach": "Use integer linear programming (ILP) to solve the job scheduling problem with the objective of minimizing total tardiness.",
+    "code": "import gurobipy as gp from typing import List, Dict def schedule(jobs: List[Dict[str, int]]) -> List[int]:     # Create a model     m = gp.Model('job_scheduling')     # Variables: binary variable indicating whether job j is scheduled at position k     y = {(i, k): m.addVar(vtype=gp.GRB.BINARY, name=f'y_{i}_{k}') for i in range(len(jobs)) for k in range(len(jobs))}     # Constraints: ensure exactly one job is scheduled at each position     for k in range(len(jobs)):         m.addConstr(gp.quicksum(y[i, k] for i in range(len(jobs))) == 1)     # Constraints: respect due dates and processing times     for i in range(len(jobs)):         for k in range(i + 1, len(jobs)):             m.addConstr(gp.quicksum((jobs[j]['due_date'] - jobs[j]['processing_time'] - (k - j)) * y[j, k] for j in range(k)) <= 0)     # Objective: minimize total tardiness     tardiness = [max(jobs[i]['due_date'] - jobs[i]['processing_time'] - (len(jobs) - i), 0) * y[i, len(jobs) - 1 - i] for i in range(len(jobs))]     m.setObjective(gp.quicksum(tardiness), gp.GRB.MINIMIZE)     # Solve the model     m.optimize()     # Extract the schedule order     schedule_order = []     for k in range(len(jobs)):         for i in range(len(jobs)):             if y[i, k].x > 0.5:                 schedule_order.append(i)     return schedule_order",
+    "score": null,
+    "success": false,
+    "error": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_itrnkpgf\\agent_run.py\", line 27\n    setObjective(gp.quicksum(tardiness), gp.GRB.MINIMIZE)     # Solve the model     m.optimize()     # Extract the schedule order     schedule_order = []     for k in range(len(jobs)):         for i in range(len(jobs)):             if y[i, k].x > 0.5:                 schedule_order.append(i)     return schedule_order\n                          ^^^^\nSyntaxError: invalid syntax\n",
+    "failure_reason": "syntax error \u2014 invalid Python syntax: invalid syntax",
+    "notes": "This approach uses ILP to find an optimal solution by formulating the problem as a mathematical program. The constraints ensure that each job is scheduled exactly once and that the processing times do not exceed the due dates. The objective is to minimize the total tardiness. (fixed after pre-test retry 3)",
+    "instance_scores": {},
+    "instance_errors": {
+      "20jobs_t0.4": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_itrnkpgf\\agent_run.py\", line 27\n    setObjective(gp.quicksum(tardiness), gp.GRB.MINIMIZE)     # Solve the model     m.optimize()     # Extract the schedule order     schedule_order = []     for k in range(len(jobs)):         for i in range(len(jobs)):             if y[i, k].x > 0.5:                 schedule_order.append(i)     return schedule_order\n                          ^^^^\nSyntaxError: invalid syntax\n",
+      "50jobs_t0.6": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_u7ch170g\\agent_run.py\", line 27\n    setObjective(gp.quicksum(tardiness), gp.GRB.MINIMIZE)     # Solve the model     m.optimize()     # Extract the schedule order     schedule_order = []     for k in range(len(jobs)):         for i in range(len(jobs)):             if y[i, k].x > 0.5:                 schedule_order.append(i)     return schedule_order\n                          ^^^^\nSyntaxError: invalid syntax\n",
+      "100jobs_t0.8": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_cmxhz4ln\\agent_run.py\", line 27\n    setObjective(gp.quicksum(tardiness), gp.GRB.MINIMIZE)     # Solve the model     m.optimize()     # Extract the schedule order     schedule_order = []     for k in range(len(jobs)):         for i in range(len(jobs)):             if y[i, k].x > 0.5:                 schedule_order.append(i)     return schedule_order\n                          ^^^^\nSyntaxError: invalid syntax\n"
+    }
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 3,
+    "agent_id": 8,
+    "mode": "explore",
+    "direction": "Implement a tabu search algorithm for job scheduling and compare its performance with existing methods.",
+    "source_refs": [],
+    "approach": "Use a genetic algorithm to find a schedule that minimizes total tardiness.",
+    "code": "import random from operator import attrgetter from functools import lru_cache class Job: def __init__(self, id, processing_time, due_date): self.id = id self.processing_time = processing_time self.due_date = due_date @lru_cache(None) def tardiness(self, schedule): total_tardiness = 0 current_time = 0 for job_id in schedule: job = next((j for j in jobs if j.id == job_id), None) processing_time = job.processing_time current_time += processing_time tardiness = max(0, current_time - job.due_date) total_tardiness += tardiness return total_tardiness class Population: def __init__(self, size, jobs): self.jobs = jobs self.size = size self.individuals = [random.sample(range(len(jobs)), len(jobs)) for _ in range(size)] def evaluate(self): self.individuals = sorted(self.individuals, key=lambda ind: sum(Job(jobs[i]['id'], jobs[i]['processing_time'], jobs[i]['due_date']).tardiness(ind) for i in ind)) def select_parents(self): return self.individuals[:int(self.size / 2)] def crossover(self, parent1, parent2): point = random.randint(1, len(parent1) - 1) child = parent1[:point] for gene in parent2: if gene not in child: child.append(gene) return child def mutate(self, individual, mutation_rate): for i in range(len(individual)): if random.random() < mutation_rate: swap_index = random.randint(0, len(individual) - 1) individual[i], individual[swap_index] = individual[swap_index], individual[i] def evolve(self, generations, mutation_rate): for _ in range(generations): self.evaluate() parents = self.select_parents() children = [self.crossover(random.choice(parents), random.choice(parents)) for _ in range(int(self.size / 2))] self.individuals = parents + children for individual in self.individuals: self.mutate(individual, mutation_rate) def get_best_schedule(self): return self.individuals[0] def schedule(jobs: list[dict]) -> list[int]: population_size = 100 generations = 100 mutation_rate = 0.1 population = Population(population_size, jobs) population.evolve(generations, mutation_rate) best_schedule = population.get_best_schedule() return [job['id'] for job in sorted(jobs, key=lambda x: best_schedule.index(x['id']))]",
+    "score": null,
+    "success": false,
+    "error": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_4fen6gb9\\agent_run.py\", line 27\n    best_schedule = population.get_best_schedule() return [job['id'] for job in sorted(jobs, key=lambda x: best_schedule.index(x['id']))]\n                 ^^^^\nSyntaxError: invalid syntax\n",
+    "failure_reason": "syntax error \u2014 invalid Python syntax: invalid syntax",
+    "notes": "This approach uses a genetic algorithm to evolve a population of schedules over multiple generations. It selects parents based on their fitness (total tardiness), performs crossover to create children, and occasionally mutates individuals to maintain diversity. The best schedule found after the specified number of generations is returned. (fixed after pre-test retry 3)",
+    "instance_scores": {},
+    "instance_errors": {
+      "20jobs_t0.4": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_4fen6gb9\\agent_run.py\", line 27\n    best_schedule = population.get_best_schedule() return [job['id'] for job in sorted(jobs, key=lambda x: best_schedule.index(x['id']))]\n                 ^^^^\nSyntaxError: invalid syntax\n",
+      "50jobs_t0.6": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_aut8dmu8\\agent_run.py\", line 27\n    best_schedule = population.get_best_schedule() return [job['id'] for job in sorted(jobs, key=lambda x: best_schedule.index(x['id']))]\n                 ^^^^\nSyntaxError: invalid syntax\n",
+      "100jobs_t0.8": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_yrnzb_w_\\agent_run.py\", line 27\n    best_schedule = population.get_best_schedule() return [job['id'] for job in sorted(jobs, key=lambda x: best_schedule.index(x['id']))]\n                 ^^^^\nSyntaxError: invalid syntax\n"
+    }
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 3,
+    "agent_id": 9,
+    "mode": "exploit",
+    "direction": "Refine the sorting-based heuristic by incorporating a more nuanced penalty system for tardy jobs.",
+    "source_refs": [
+      {
+        "agent_id": 8,
+        "iteration": 2
+      }
+    ],
+    "approach": "Sort jobs based on a custom score that considers processing time and due date.",
+    "code": "def schedule(jobs: list[dict]) -> list[int]:    # Calculate a custom score for each job    for job in jobs:        job['score'] = job['processing_time'] + (job['due_date'] / job['processing_time']) + (job['due_date'] ** 2 / job['processing_time'])    # Sort jobs by the custom score in descending order    sorted_jobs = sorted(jobs, key=lambda x: -x['score'])    # Return the sorted list of job IDs    return [job['id'] for job in sorted_jobs]",
+    "score": null,
+    "success": false,
+    "error": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_rd_zgc00\\agent_run.py\", line 30\n    try:\n    ^\nIndentationError: expected an indented block after function definition on line 27\n",
+    "failure_reason": "indentation error \u2014 code has broken indentation, likely malformed output",
+    "notes": "This approach attempts to prioritize jobs based on a combination of their processing time and due date, aiming to minimize tardiness. (fixed after pre-test retry 3)",
+    "instance_scores": {},
+    "instance_errors": {
+      "20jobs_t0.4": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_rd_zgc00\\agent_run.py\", line 30\n    try:\n    ^\nIndentationError: expected an indented block after function definition on line 27\n",
+      "50jobs_t0.6": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_pvytg1os\\agent_run.py\", line 30\n    try:\n    ^\nIndentationError: expected an indented block after function definition on line 27\n",
+      "100jobs_t0.8": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_w7mkp5ys\\agent_run.py\", line 30\n    try:\n    ^\nIndentationError: expected an indented block after function definition on line 27\n"
+    }
+  }
+]

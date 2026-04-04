@@ -1350,6 +1350,15 @@ wheels = [
 ]
 
 [[package]]
+name = "python-toon"
+version = "0.1.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/4e/92/640c83ca46d5fe9c49895449a8932f55252537dd13dd22186cbac3a1ce59/python_toon-0.1.3.tar.gz", hash = "sha256:ca348b214c4f1cdad3579fd83dd60032d9eb87eb349c2d430ad9eb6371f174bf", size = 31280, upload-time = "2025-11-04T09:12:20.949Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/26/a4/2f2def0378b44f913d2d6cb3bc5b1a15267b363937ab1cb9afb07ce2313c/python_toon-0.1.3-py3-none-any.whl", hash = "sha256:a27b0ee4a729e730d1037d0a63eb8b344b3e5a26e3dc9a173067b6c31a868ee6", size = 21797, upload-time = "2025-11-04T09:12:19.443Z" },
+]
+
+[[package]]
 name = "pytz"
 version = "2026.1.post1"
 source = { registry = "https://pypi.org/simple" }
@@ -1832,7 +1841,6 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "gurobipy" },
-    { name = "mlx-lm" },
     { name = "networkx", version = "3.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "networkx", version = "3.6.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -1841,10 +1849,16 @@ dependencies = [
     { name = "psutil" },
     { name = "pydantic" },
     { name = "pydantic-ai-slim", extra = ["openai"] },
+    { name = "python-toon" },
     { name = "rich" },
     { name = "scipy", version = "1.15.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "tomli" },
+]
+
+[package.optional-dependencies]
+mlx = [
+    { name = "mlx-lm" },
 ]
 
 [package.dev-dependencies]
@@ -1855,17 +1869,19 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "gurobipy", specifier = ">=13.0.1" },
-    { name = "mlx-lm", specifier = ">=0.31.1" },
+    { name = "mlx-lm", marker = "extra == 'mlx'", specifier = ">=0.31.1" },
     { name = "networkx", specifier = ">=3.4.2" },
     { name = "numpy", specifier = ">=1.24.0" },
     { name = "ortools", specifier = ">=9.15.6755" },
     { name = "psutil", specifier = ">=7.2.2" },
     { name = "pydantic", specifier = ">=2" },
     { name = "pydantic-ai-slim", extras = ["openai"], specifier = ">=1.73.0" },
+    { name = "python-toon", specifier = ">=0.1.3" },
     { name = "rich", specifier = ">=14.3.3" },
     { name = "scipy", specifier = ">=1.15.3" },
     { name = "tomli", specifier = ">=2.4.1" },
 ]
+provides-extras = ["mlx"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=9.0.2" }]

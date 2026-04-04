@@ -1,0 +1,45 @@
+[
+  {
+    "record_type": "agent_attempt",
+    "iteration": 2,
+    "agent_id": 0,
+    "mode": "exploit",
+    "direction": "Refine the Genetic Algorithm implementation to ensure it handles different instance sizes effectively and optimize parameters like population size, mutation rate, and number of generations.",
+    "source_refs": [
+      {
+        "agent_id": 0,
+        "iteration": 1
+      }
+    ],
+    "approach": "Use a genetic algorithm to minimize total tardiness",
+    "code": "import random def evaluate_tardiness(schedule, jobs_dict):    current_time = 0    total_tardiness = 0    for job_id in schedule:        job = jobs_dict[job_id]        current_time += job['processing_time']        tardiness = max(0, current_time - job['due_date'])        total_tardiness += tardiness    return total_tardiness def generate_initial_population(jobs, population_size):    population = []    job_ids = [job['id'] for job in jobs]    for _ in range(population_size):        population.append(random.sample(job_ids, len(job_ids)))    return population def tournament_selection(population, fitnesses, tournament_size=3):    selected = random.sample(list(zip(population, fitnesses)), tournament_size)    winner = min(selected, key=lambda x: x[1])    return winner[0] def uniform_crossover(parent1, parent2):    size = len(parent1)    mask = [random.choice([0, 1]) for _ in range(size)]    child1 = [-1] * size    child2 = [-1] * size    for i in range(size):        if mask[i] == 1:            child1[i] = parent1[i]            child2[i] = parent2[i]    remaining1 = [job for job in parent1 if job not in child2]    remaining2 = [job for job in parent2 if job not in child1]    j1, j2 = 0, 0    for i in range(size):        if child1[i] == -1:            child1[i] = remaining1[j1]            j1 += 1        if child2[i] == -1:            child2[i] = remaining2[j2]            j2 += 1    return child1, child2 def mutate(schedule, mutation_rate=0.01):    for i in range(len(schedule)):        if random.random() < mutation_rate:            j = random.randint(0, len(schedule) - 1)            schedule[i], schedule[j] = schedule[j], schedule[i] def genetic_algorithm(jobs, population_size=200, generations=1000, mutation_rate=0.05):    jobs_dict = {job['id']: job for job in jobs}    population = generate_initial_population(jobs, population_size)    for generation in range(generations):        fitnesses = [evaluate_tardiness(individual, jobs_dict) for individual in population]        new_population = []        for _ in range(population_size // 2):            parent1 = tournament_selection(population, fitnesses)            parent2 = tournament_selection(population, fitnesses)            child1, child2 = uniform_crossover(parent1, parent2)            mutate(child1, mutation_rate)            mutate(child2, mutation_rate)            new_population.extend([child1, child2])        population = new_population    best_schedule = min(population, key=lambda ind: evaluate_tardiness(ind, jobs_dict))    return best_schedule def schedule(jobs: list[dict]) -> list[int]:    return genetic_algorithm(jobs)",
+    "score": null,
+    "success": false,
+    "error": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_3ri0r7t_\\agent_run.py\", line 27\n    _population = []        for _ in range(population_size // 2):            parent1 = tournament_selection(population, fitnesses)            parent2 = tournament_selection(population, fitnesses)            child1, child2 = uniform_crossover(parent1, parent2)            mutate(child1, mutation_rate)            mutate(child2, mutation_rate)            new_population.extend([child1, child2])        population = new_population    best_schedule = min(population, key=lambda ind: evaluate_tardiness(ind, jobs_dict))    return best_schedule def schedule(jobs: list[dict]) -> list[int]:    return genetic_algorithm(jobs)\n                  ^^^\nSyntaxError: invalid syntax\n",
+    "failure_reason": "syntax error \u2014 invalid Python syntax: invalid syntax",
+    "notes": "Fixed the syntax error and ensured the genetic algorithm returns a valid permutation of job IDs. (fixed after pre-test retry 1)",
+    "instance_scores": {},
+    "instance_errors": {
+      "20jobs_t0.4": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_3ri0r7t_\\agent_run.py\", line 27\n    _population = []        for _ in range(population_size // 2):            parent1 = tournament_selection(population, fitnesses)            parent2 = tournament_selection(population, fitnesses)            child1, child2 = uniform_crossover(parent1, parent2)            mutate(child1, mutation_rate)            mutate(child2, mutation_rate)            new_population.extend([child1, child2])        population = new_population    best_schedule = min(population, key=lambda ind: evaluate_tardiness(ind, jobs_dict))    return best_schedule def schedule(jobs: list[dict]) -> list[int]:    return genetic_algorithm(jobs)\n                  ^^^\nSyntaxError: invalid syntax\n",
+      "50jobs_t0.6": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_dsjdg_sq\\agent_run.py\", line 27\n    _population = []        for _ in range(population_size // 2):            parent1 = tournament_selection(population, fitnesses)            parent2 = tournament_selection(population, fitnesses)            child1, child2 = uniform_crossover(parent1, parent2)            mutate(child1, mutation_rate)            mutate(child2, mutation_rate)            new_population.extend([child1, child2])        population = new_population    best_schedule = min(population, key=lambda ind: evaluate_tardiness(ind, jobs_dict))    return best_schedule def schedule(jobs: list[dict]) -> list[int]:    return genetic_algorithm(jobs)\n                  ^^^\nSyntaxError: invalid syntax\n",
+      "100jobs_t0.8": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_yc9tm8wn\\agent_run.py\", line 27\n    _population = []        for _ in range(population_size // 2):            parent1 = tournament_selection(population, fitnesses)            parent2 = tournament_selection(population, fitnesses)            child1, child2 = uniform_crossover(parent1, parent2)            mutate(child1, mutation_rate)            mutate(child2, mutation_rate)            new_population.extend([child1, child2])        population = new_population    best_schedule = min(population, key=lambda ind: evaluate_tardiness(ind, jobs_dict))    return best_schedule def schedule(jobs: list[dict]) -> list[int]:    return genetic_algorithm(jobs)\n                  ^^^\nSyntaxError: invalid syntax\n"
+    }
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 2,
+    "agent_id": 1,
+    "mode": "explore",
+    "direction": "Implement a Tabu Search algorithm to minimize total tardiness, exploring its potential in handling larger job instances efficiently.",
+    "source_refs": [],
+    "approach": "Failed to get LLM response",
+    "code": "",
+    "score": null,
+    "success": false,
+    "error": "LLM error (UnexpectedModelBehavior): Model token limit (3072) exceeded before any response was generated. Increase the `max_tokens` model setting, or simplify the prompt to result in a shorter response that will fit within the limit.",
+    "failure_reason": "LLM unreachable \u2014 could not get a response from the model",
+    "notes": "",
+    "instance_scores": {},
+    "instance_errors": {}
+  }
+]

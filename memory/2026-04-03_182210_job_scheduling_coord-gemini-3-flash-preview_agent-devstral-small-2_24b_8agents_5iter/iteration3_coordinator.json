@@ -1,0 +1,83 @@
+{
+  "record_type": "coordinator_decision",
+  "iteration": 3,
+  "analysis": "Iteration 2 established that the Modified Due Date (MDD) rule is a superior initialization strategy compared to EDD or random shuffling. Metaheuristics like Iterated Local Search (ILS), Tabu Search, and Variable Neighborhood Search (VNS) all achieved similar aggregate scores (around 17,400\u201317,500), with ILS currently leading. The main bottleneck for larger instances (100 jobs) is the computational cost of exhaustive insertion neighborhoods. Approaches like GRASP timed out, and Beam Search failed due to implementation errors. The next iteration will focus on refining the top-performing metaheuristics by combining their strengths (e.g., Tabu within ILS) and exploring population-based or priority-refinement algorithms like Genetic Algorithms and Squeaky Wheel Optimization.",
+  "assignments": [
+    {
+      "agent_id": 0,
+      "mode": "exploit",
+      "direction": "Refine the leading Iterated Local Search (ILS). Replace the basic insertion local search with a Variable Neighborhood Descent (VND) that cycles through swap, insertion, and 2-opt moves. To handle the 100-job instances more efficiently, implement a 'first-improvement' rather than 'best-improvement' strategy in the local search.",
+      "source_refs": [
+        {
+          "agent_id": 0,
+          "iteration": 2
+        }
+      ]
+    },
+    {
+      "agent_id": 1,
+      "mode": "exploit",
+      "direction": "Combine the strengths of ILS and Tabu Search. Use the ILS framework (perturbation + restart) but replace the standard local search with a short-tenure Tabu Search. This should help in escaping local optima more systematically than random swaps. Use the MDD rule for the initial solution.",
+      "source_refs": [
+        {
+          "agent_id": 0,
+          "iteration": 2
+        },
+        {
+          "agent_id": 4,
+          "iteration": 2
+        }
+      ]
+    },
+    {
+      "agent_id": 2,
+      "mode": "exploit",
+      "direction": "Enhance the Variable Neighborhood Search (VNS) by incorporating the 'critical job' focus. In the local search phase, only attempt moves involving jobs that are currently tardy or their immediate neighbors in the sequence. This reduces the search space and focuses effort where improvements are most likely.",
+      "source_refs": [
+        {
+          "agent_id": 3,
+          "iteration": 2
+        },
+        {
+          "agent_id": 4,
+          "iteration": 2
+        }
+      ]
+    },
+    {
+      "agent_id": 3,
+      "mode": "exploit",
+      "direction": "Refine the Simulated Annealing approach by implementing a 'reheating' schedule. If no improvement is found for a set number of iterations, increase the temperature to escape the local optimum. Use a hybrid neighborhood that selects between swap and insertion with a bias toward insertion, as it has proven more effective for tardiness problems.",
+      "source_refs": [
+        {
+          "agent_id": 1,
+          "iteration": 2
+        }
+      ]
+    },
+    {
+      "agent_id": 4,
+      "mode": "explore",
+      "direction": "Implement a Genetic Algorithm (GA) specifically designed for permutation problems. Use the MDD rule to seed 20% of the initial population. Use Order Crossover (OX) or Partially Mapped Crossover (PMX) to maintain valid permutations, and apply insertion-based mutation. Maintain a small population to ensure enough generations can pass within the time limit.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 5,
+      "mode": "explore",
+      "direction": "Implement a robust Beam Search. Fix the previous implementation's comparison error by using a tuple of (score, unique_id, state) in the heap. Use a beam width that scales with the number of jobs. For the evaluation function, use the current tardiness plus a look-ahead estimate based on the 'COVERT' rule (Cost Over Time) or remaining slack.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 6,
+      "mode": "explore",
+      "direction": "Explore Ant Colony Optimization (ACO) for the TSP-like formulation of job sequencing. Define pheromone levels on edges (job i followed by job j) and use MDD as the heuristic information. Ensure the pheromone update rule rewards the total tardiness of the entire path.",
+      "source_refs": []
+    },
+    {
+      "agent_id": 7,
+      "mode": "explore",
+      "direction": "Implement Squeaky Wheel Optimization (SWO). This involves a cycle of: 1. Construct a solution using a priority-based heuristic. 2. Analyze the solution to find 'squeaky' jobs (those with high individual tardiness). 3. Increase the priority 'blame' for those jobs. 4. Repeat. This approach adaptively learns which jobs are difficult to schedule.",
+      "source_refs": []
+    }
+  ]
+}

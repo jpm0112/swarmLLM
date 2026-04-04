@@ -1,0 +1,21 @@
+[
+  {
+    "record_type": "agent_attempt",
+    "iteration": 1,
+    "agent_id": 0,
+    "mode": "explore",
+    "direction": "Try FIFO as a sanity check",
+    "source_refs": [],
+    "approach": "FIFO sanity check",
+    "code": "def schedule(jobs):\n    return [job['id'] for job in jobs]",
+    "score": 5,
+    "success": true,
+    "error": null,
+    "failure_reason": null,
+    "notes": "Aggregate=5 | tiny=5 | valid smoke-test worker draft",
+    "instance_scores": {
+      "tiny": 5
+    },
+    "instance_errors": {}
+  }
+]

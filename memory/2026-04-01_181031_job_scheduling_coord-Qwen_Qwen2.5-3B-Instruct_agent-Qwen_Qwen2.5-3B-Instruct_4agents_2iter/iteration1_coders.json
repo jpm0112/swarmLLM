@@ -1,0 +1,82 @@
+[
+  {
+    "record_type": "agent_attempt",
+    "iteration": 1,
+    "agent_id": 0,
+    "mode": "explore",
+    "direction": "Implement a genetic algorithm for job scheduling.",
+    "source_refs": [],
+    "approach": "Use a genetic algorithm to evolve a solution that minimizes total tardiness.",
+    "code": "from random import randrange, choice; from typing import List; def genetic_algorithm_schedule(jobs: List[dict]) -> List[int]: population_size = 100; mutation_rate = 0.01; generations = 100; def fitness(schedule): total_tardiness = 0; current_job = next((job for job in jobs if job['id'] == schedule[0]), None) deadline = current_job['due_date']; for job_id in schedule: current_job = next((job for job in jobs if job['id'] == job_id), None); total_tardiness += max(0, current_job['due_date'] - deadline - current_job['processing_time']); deadline += current_job['processing_time']; return total_tardiness; def generate_initial_population(population_size: int, job_count: int) -> List[List[int]]: return [[choice(range(job_count)) for _ in range(job_count)] for _ in range(population_size)]; initial_population = generate_initial_population(population_size, len(jobs)); best_schedule = None; best_fitness = float('inf'); for generation in range(generations): population = []; for individual in initial_population: schedule = [jobs[job]['id'] for job in individual]; population.append([individual, fitness(schedule)]); population.sort(key=lambda x: x[1]); top_individual, top_fitness = population[0]; if top_fitness < best_fitness: best_schedule = top_individual; best_fitness = top_fitness; crossover_probability = 0.7; mutation_probability = 0.01; for _ in range(population_size // 2): parent1, parent2 = choice(population), choice(population); child = parent1.copy(); crossover_point = randrange(len(child)); child[crossover_point:] = parent2[crossover_point:]; if randrange(100) < crossover_probability: for _ in range(randrange(10)): gene_index = randrange(len(child)); other_gene_index = randrange(len(child)); child[gene_index], child[other_gene_index] = child[other_gene_index], child[gene_index]; population.append([child, fitness([jobs[job]['id'] for job in child])]); initial_population = population[:population_size // 2] + [top_individual]; return best_schedule;",
+    "score": null,
+    "success": false,
+    "error": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_4d5hn8dt\\agent_run.py\", line 27\n    l_population: schedule = [jobs[job]['id'] for job in individual]; population.append([individual, fitness(schedule)]); population.sort(key=lambda x: x[1]); top_individual, top_fitness = population[0]; if top_fitness < best_fitness: best_schedule = top_individual; best_fitness = top_fitness; crossover_probability = 0.7; mutation_probability = 0.01; for _ in range(population_size // 2): parent1, parent2 = choice(population), choice(population); child = parent1.copy(); crossover_point = randrange(len(child)); child[crossover_point:] = parent2[crossover_point:]; if randrange(100) < crossover_probability: for _ in range(randrange(10)): gene_index = randrange(len(child)); other_gene_index = randrange(len(child)); child[gene_index], child[other_gene_index] = child[other_gene_index], child[gene_index]; population.append([child, fitness([jobs[job]['id'] for job in child])]); initial_population = population[:population_size // 2] + [top_individual]; return best_schedule;\n                                                                   ^^^\nSyntaxError: invalid syntax\n",
+    "failure_reason": "syntax error \u2014 invalid Python syntax: invalid syntax",
+    "notes": "The genetic algorithm evolves a schedule by selecting the fittest individuals and applying genetic operations such as crossover and mutation. (fixed after pre-test retry 1)",
+    "instance_scores": {},
+    "instance_errors": {
+      "20jobs_t0.4": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_4d5hn8dt\\agent_run.py\", line 27\n    l_population: schedule = [jobs[job]['id'] for job in individual]; population.append([individual, fitness(schedule)]); population.sort(key=lambda x: x[1]); top_individual, top_fitness = population[0]; if top_fitness < best_fitness: best_schedule = top_individual; best_fitness = top_fitness; crossover_probability = 0.7; mutation_probability = 0.01; for _ in range(population_size // 2): parent1, parent2 = choice(population), choice(population); child = parent1.copy(); crossover_point = randrange(len(child)); child[crossover_point:] = parent2[crossover_point:]; if randrange(100) < crossover_probability: for _ in range(randrange(10)): gene_index = randrange(len(child)); other_gene_index = randrange(len(child)); child[gene_index], child[other_gene_index] = child[other_gene_index], child[gene_index]; population.append([child, fitness([jobs[job]['id'] for job in child])]); initial_population = population[:population_size // 2] + [top_individual]; return best_schedule;\n                                                                   ^^^\nSyntaxError: invalid syntax\n",
+      "50jobs_t0.6": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_7b8lhwiz\\agent_run.py\", line 27\n    l_population: schedule = [jobs[job]['id'] for job in individual]; population.append([individual, fitness(schedule)]); population.sort(key=lambda x: x[1]); top_individual, top_fitness = population[0]; if top_fitness < best_fitness: best_schedule = top_individual; best_fitness = top_fitness; crossover_probability = 0.7; mutation_probability = 0.01; for _ in range(population_size // 2): parent1, parent2 = choice(population), choice(population); child = parent1.copy(); crossover_point = randrange(len(child)); child[crossover_point:] = parent2[crossover_point:]; if randrange(100) < crossover_probability: for _ in range(randrange(10)): gene_index = randrange(len(child)); other_gene_index = randrange(len(child)); child[gene_index], child[other_gene_index] = child[other_gene_index], child[gene_index]; population.append([child, fitness([jobs[job]['id'] for job in child])]); initial_population = population[:population_size // 2] + [top_individual]; return best_schedule;\n                                                                   ^^^\nSyntaxError: invalid syntax\n",
+      "100jobs_t0.8": "  File \"C:\\Users\\JP\\AppData\\Local\\Temp\\swarmllm_9_sywo77\\agent_run.py\", line 27\n    l_population: schedule = [jobs[job]['id'] for job in individual]; population.append([individual, fitness(schedule)]); population.sort(key=lambda x: x[1]); top_individual, top_fitness = population[0]; if top_fitness < best_fitness: best_schedule = top_individual; best_fitness = top_fitness; crossover_probability = 0.7; mutation_probability = 0.01; for _ in range(population_size // 2): parent1, parent2 = choice(population), choice(population); child = parent1.copy(); crossover_point = randrange(len(child)); child[crossover_point:] = parent2[crossover_point:]; if randrange(100) < crossover_probability: for _ in range(randrange(10)): gene_index = randrange(len(child)); other_gene_index = randrange(len(child)); child[gene_index], child[other_gene_index] = child[other_gene_index], child[gene_index]; population.append([child, fitness([jobs[job]['id'] for job in child])]); initial_population = population[:population_size // 2] + [top_individual]; return best_schedule;\n                                                                   ^^^\nSyntaxError: invalid syntax\n"
+    }
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 1,
+    "agent_id": 1,
+    "mode": "explore",
+    "direction": "Apply simulated annealing to minimize tardiness in job scheduling.",
+    "source_refs": [],
+    "approach": "Use simulated annealing to minimize total tardiness",
+    "code": "def schedule(jobs: list[dict]) -> list[int]: return simulated_annealing_schedule(jobs)",
+    "score": null,
+    "success": false,
+    "error": "NameError: name 'simulated_annealing_schedule' is not defined",
+    "failure_reason": "undefined variable 'simulated_annealing_schedule' \u2014 code references something not defined",
+    "notes": "Simulated annealing was chosen as it can handle non-convex objective functions like total tardiness effectively. (fixed after pre-test retry 1)",
+    "instance_scores": {},
+    "instance_errors": {
+      "20jobs_t0.4": "NameError: name 'simulated_annealing_schedule' is not defined",
+      "50jobs_t0.6": "NameError: name 'simulated_annealing_schedule' is not defined",
+      "100jobs_t0.8": "NameError: name 'simulated_annealing_schedule' is not defined"
+    }
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 1,
+    "agent_id": 2,
+    "mode": "explore",
+    "direction": "Utilize ant colony optimization techniques for scheduling jobs.",
+    "source_refs": [],
+    "approach": "Use a greedy algorithm to assign jobs based on their due dates and processing times.",
+    "code": "def schedule(jobs: list[dict]) -> list[int]: return [job['id'] for job in sorted(jobs, key=lambda x: (x['due_date'], -x['processing_time']))]",
+    "score": 26301,
+    "success": true,
+    "error": null,
+    "failure_reason": null,
+    "notes": "Aggregate=26301 | 100jobs_t0.8=19662 | 20jobs_t0.4=995 | 50jobs_t0.6=5644 | Sort jobs first by due date, then by processing time in descending order. Greedy heuristic does not guarantee optimal solution but provides a reasonable schedule. (fixed after pre-test retry 1)",
+    "instance_scores": {
+      "20jobs_t0.4": 995,
+      "50jobs_t0.6": 5644,
+      "100jobs_t0.8": 19662
+    },
+    "instance_errors": {}
+  },
+  {
+    "record_type": "agent_attempt",
+    "iteration": 1,
+    "agent_id": 3,
+    "mode": "explore",
+    "direction": "Experiment with particle swarm optimization to find optimal job schedules.",
+    "source_refs": [],
+    "approach": "Failed to get LLM response",
+    "code": "",
+    "score": null,
+    "success": false,
+    "error": "LLM error (UnexpectedModelBehavior): Model token limit (4096) exceeded before any response was generated. Increase the `max_tokens` model setting, or simplify the prompt to result in a shorter response that will fit within the limit.",
+    "failure_reason": "LLM unreachable \u2014 could not get a response from the model",
+    "notes": "",
+    "instance_scores": {},
+    "instance_errors": {}
+  }
+]

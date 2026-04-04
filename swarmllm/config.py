@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 
-BackendKind = Literal["ollama", "vllm-metal", "vllm", "mlx-lm"]
+BackendKind = Literal["ollama", "vllm-metal", "vllm", "mlx-lm", "groq", "together"]
 
 
 @dataclass
@@ -52,8 +52,8 @@ class LLMConfig:
             )
         ]
     )
-    temperature_worker: float = 1.0
-    temperature_coordinator: float = 0.4
+    temperature_worker: float = 0.1
+    temperature_coordinator: float = 0.8
     max_tokens_worker: int = 4096
     max_tokens_coordinator: int = 8192
     request_timeout: int = 300  # seconds for agent calls
@@ -83,6 +83,7 @@ class SwarmConfig:
     explore_ratio: float = 0.5  # fraction of agents that explore (vs exploit)
     max_concurrent_agents: int = 5  # overridden by setup_run.py based on model + GPUs
     agent_retries: int = 1  # retries per agent if code fails pre-test on smallest instance
+    enable_socrates: bool = True  # run Socrates knowledge-distillation agent alongside coders
 
 
 @dataclass
